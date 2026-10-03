@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { imprimer } from '../lib/navigation.svelte';
   import {
     aJoue,
@@ -9,6 +10,7 @@
     equipe,
     inscrire,
     lancerTirage,
+    nomJoueur,
     nomParticipant,
     nomsEquipe,
     normaliser,
@@ -16,8 +18,9 @@
     trouverOuCreerEquipe,
     trouverOuCreerJoueur,
   } from '../lib/store.svelte';
-  import type { Concours, Id } from '../lib/types';
+  import type { Concours, Equipe, Id } from '../lib/types';
   import { aller } from '../lib/navigation.svelte';
+  import ChampSuggestions, { type Suggestion } from './ChampSuggestions.svelte';
 
   let { concours: c }: { concours: Concours } = $props();
 
@@ -29,8 +32,11 @@
   let message = $state('');
   let recherche = $state('');
   let champ1: HTMLInputElement | undefined = $state();
-
-  const nomsJoueurs = $derived([...app.donnees.joueurs].map((j) => j.nom).sort((a, b) => a.localeCompare(b, 'fr')));
+  let champ2: HTMLInputElement | undefined = $state();
+  let bouton: HTMLButtonElement | undefined = $state();
+  let boutonActif = $state(false);
+  /** Le formulaire est rempli et le bouton a le focus : il ne reste qu'à valider. */
+  const pret = $derived(boutonActif && !!j1.trim() && (melee || !!j2.trim()));
 
   /** Joueurs déjà inscrits à ce concours (directement ou via leur équipe). */
   const joueursInscrits = $derived(
@@ -50,18 +56,105 @@
     return melee || !e ? nomParticipant(c, id) : `${e.nom ?? ''} ${nomsEquipe(e)}`;
   }
 
-  /** Quand on tape le premier joueur d'une équipe connue, on propose son partenaire habituel. */
-  function suggererPartenaire() {
-    if (melee || j2) return;
-    const cle = normaliser(j1);
-    const j = app.donnees.joueurs.find((x) => normaliser(x.nom) === cle);
-    if (!j) return;
-    const habituelles = app.donnees.equipes.filter((e) => e.joueurs.includes(j.id));
-    if (habituelles.length !== 1) return;
-    const e = habituelles[0];
-    const autre = e.joueurs.find((x) => x !== j.id)!;
-    j2 = app.donnees.joueurs.find((x) => x.id === autre)?.nom ?? '';
-    if (e.nom && !nomEq) nomEq = e.nom;
+  /** 2 : un mot du nom commence par la saisie ; 1 : le nom la contient ; 0 : aucun rapport. */
+  function correspond(nom: string, q: string): number {
+    const n = normaliser(nom);
+    if (n.split(' ').some((m) => m.startsWith(q)) || n.startsWith(q)) return 2;
+    return n.includes(q) ? 1 : 0;
+  }
+
+  const nbConcours = (equipeId: Id) => app.donnees.concours.filter((x) => x.participants.some((p) => p.id === equipeId)).length;
+
+  interface Proposition {
+    rang: number;
+    s: Suggestion;
+    action: () => void;
+  }
+
+  function trier(l: Proposition[]): Proposition[] {
+    return l.sort((x, y) => y.rang - x.rang || x.s.titre.localeCompare(y.s.titre, 'fr')).slice(0, 8);
+  }
+
+  /** Joueur 1 : les équipes habituelles d'abord (on remplit tout d'un coup), puis les joueurs seuls. */
+  const propositions1 = $derived.by(() => {
+    const q = normaliser(j1);
+    if (!q) return [];
+    const res: Proposition[] = [];
+    if (!melee) {
+      for (const e of app.donnees.equipes) {
+        if (e.joueurs.some((id) => joueursInscrits.has(id))) continue;
+        const scores = e.joueurs.map((id) => correspond(nomJoueur(id), q));
+        const meilleur = Math.max(...scores, e.nom ? correspond(e.nom, q) : 0);
+        if (!meilleur) continue;
+        const [a, b] = scores[1] > scores[0] ? [e.joueurs[1], e.joueurs[0]] : e.joueurs;
+        res.push({
+          rang: meilleur * 1000 + nbConcours(e.id),
+          s: { cle: `e${e.id}`, titre: `${nomJoueur(a)} / ${nomJoueur(b)}`, badge: 'équipe', detail: e.nom },
+          action: () => choisirEquipe(e, a, b),
+        });
+      }
+    }
+    for (const j of app.donnees.joueurs) {
+      if (joueursInscrits.has(j.id)) continue;
+      const sc = correspond(j.nom, q);
+      if (!sc) continue;
+      res.push({
+        rang: sc * 1000 - 500,
+        s: { cle: `j${j.id}`, titre: j.nom, detail: melee ? undefined : 'Seul — choisir ensuite son partenaire' },
+        action: () => choisirJoueur1(j.nom),
+      });
+    }
+    return trier(res);
+  });
+
+  const propositions2 = $derived.by(() => {
+    const q = normaliser(j2);
+    if (!q) return [];
+    const res: Proposition[] = [];
+    for (const j of app.donnees.joueurs) {
+      if (joueursInscrits.has(j.id) || normaliser(j.nom) === normaliser(j1)) continue;
+      const sc = correspond(j.nom, q);
+      if (sc) res.push({ rang: sc * 1000, s: { cle: `j${j.id}`, titre: j.nom }, action: () => choisirJoueur2(j.nom) });
+    }
+    return trier(res);
+  });
+
+  async function choisirEquipe(e: Equipe, a: Id, b: Id) {
+    j1 = nomJoueur(a);
+    j2 = nomJoueur(b);
+    nomEq = e.nom ?? '';
+    await tick();
+    bouton?.focus();
+  }
+
+  async function choisirJoueur1(nom: string) {
+    j1 = nom;
+    await tick();
+    (melee ? bouton : champ2)?.focus();
+  }
+
+  async function choisirJoueur2(nom: string) {
+    j2 = nom;
+    // Si ces deux joueurs ont déjà joué ensemble, on reprend le nom de leur équipe.
+    const a = chercherJoueur(j1);
+    const b = chercherJoueur(nom);
+    const e = a && b ? app.donnees.equipes.find((x) => x.joueurs.includes(a.id) && x.joueurs.includes(b.id)) : undefined;
+    if (e?.nom && !nomEq) nomEq = e.nom;
+    await tick();
+    bouton?.focus();
+  }
+
+  const choisir = (l: Proposition[]) => (s: Suggestion) => l.find((p) => p.s.cle === s.cle)?.action();
+
+  /** Entrée sur le joueur 1 sans suggestion : on passe au joueur 2 au lieu d'inscrire. */
+  function entree1(e: KeyboardEvent) {
+    if (melee || !j1.trim() || j2.trim()) return;
+    e.preventDefault();
+    champ2?.focus();
+  }
+
+  function entree2(e: KeyboardEvent) {
+    if (!j2.trim()) e.preventDefault();
   }
 
   function ajouter(e: SubmitEvent) {
@@ -132,25 +225,30 @@
   <div>
     <form class="carte" onsubmit={ajouter}>
       <h2>{melee ? 'Inscrire un joueur' : 'Inscrire une équipe'}</h2>
-      <datalist id="joueurs-connus">
-        {#each nomsJoueurs as n (n)}<option value={n}></option>{/each}
-      </datalist>
       <div class="pile">
-        <label class="champ">
-          <span>{melee ? 'Nom du joueur' : 'Joueur 1'}</span>
-          <input
-            bind:this={champ1}
+        <div class="champ">
+          <label for="joueur1">{melee ? 'Nom du joueur' : 'Joueur 1'}</label>
+          <ChampSuggestions
+            id="joueur1"
             bind:value={j1}
-            list="joueurs-connus"
-            placeholder="Nom Prénom"
-            autocomplete="off"
-            onchange={suggererPartenaire} />
-        </label>
+            bind:champ={champ1}
+            suggestions={propositions1.map((p) => p.s)}
+            onchoisir={choisir(propositions1)}
+            onentree={entree1}
+            placeholder={melee ? 'Nom Prénom' : 'Nom Prénom, ou nom d’équipe'} />
+        </div>
         {#if !melee}
-          <label class="champ">
-            <span>Joueur 2</span>
-            <input bind:value={j2} list="joueurs-connus" placeholder="Nom Prénom" autocomplete="off" />
-          </label>
+          <div class="champ">
+            <label for="joueur2">Joueur 2</label>
+            <ChampSuggestions
+              id="joueur2"
+              bind:value={j2}
+              bind:champ={champ2}
+              suggestions={propositions2.map((p) => p.s)}
+              onchoisir={choisir(propositions2)}
+              onentree={entree2}
+              placeholder="Nom Prénom" />
+          </div>
           <label class="champ">
             <span>Nom de l'équipe <small>(facultatif)</small></span>
             <input bind:value={nomEq} placeholder="Les As de pique" autocomplete="off" />
@@ -158,9 +256,19 @@
         {/if}
         {#if erreur}<div class="alerte erreur">{erreur}</div>{/if}
         {#if message}<div class="alerte info">{message}</div>{/if}
-        <button class="principal" type="submit">Inscrire</button>
+        <button
+          class="principal"
+          type="submit"
+          bind:this={bouton}
+          onfocus={() => (boutonActif = true)}
+          onblur={() => (boutonActif = false)}>Inscrire</button>
+        {#if pret}
+          <small class="pret">Vérifiez puis appuyez sur <kbd>Entrée</kbd> pour inscrire.</small>
+        {/if}
         <small class="discret">
-          Les joueurs déjà connus sont proposés pendant la saisie. Un nouveau nom crée automatiquement une fiche joueur.
+          {melee
+            ? 'Les joueurs déjà venus sont proposés pendant la frappe.'
+            : 'Tapez le nom d’un joueur : ses équipes habituelles sont proposées et remplissent tout d’un coup. Un nouveau nom crée automatiquement une fiche joueur.'}
         </small>
       </div>
     </form>
@@ -270,6 +378,23 @@
   }
   .ligne {
     margin-bottom: 0.75rem;
+  }
+  .champ > label {
+    font-weight: 600;
+    font-size: 0.93rem;
+  }
+  .pret {
+    color: var(--accent-fort);
+    font-weight: 600;
+  }
+  kbd {
+    font: inherit;
+    font-size: 0.85em;
+    padding: 0 0.35em;
+    border: 1px solid var(--bord);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--surface-2);
   }
   tr.abandon td {
     color: var(--texte-2);

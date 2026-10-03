@@ -13,7 +13,8 @@
     </li>
     <li>
       <strong>Inscrire les équipes</strong> dans l'onglet « Inscriptions ». Chaque équipe reçoit un numéro.
-      Les joueurs déjà venus sont proposés pendant la saisie.
+      Tapez le début du nom d'un joueur : si son équipe est déjà connue, elle est proposée. Entrée la choisit
+      (les deux joueurs sont remplis), puis Entrée l'inscrit. Pour un nouveau joueur, Entrée passe au joueur 2.
     </li>
     <li>
       <strong>Tirage au sort de la partie 1.</strong> Imprimez le tirage pour l'afficher, et les feuilles de table si besoin.
