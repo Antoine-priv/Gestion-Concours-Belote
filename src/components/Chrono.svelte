@@ -97,7 +97,7 @@
         {:else}
           <button class="principal" onclick={reprendre}>▶ Reprendre</button>
         {/if}
-        <button class="petit" onclick={() => ajuster(-1)} title="Retirer une minute">−1 min</button>
+        <button class="petit" disabled={ch.dureeMs <= 60_000} onclick={() => ajuster(-1)} title="Retirer une minute">−1 min</button>
         <button class="petit" onclick={() => ajuster(1)} title="Ajouter une minute">+1 min</button>
         <button class="petit" onclick={() => ajuster(5)} title="Ajouter 5 minutes">+5 min</button>
         <button class="petit danger" onclick={arreter}>Remise à zéro</button>

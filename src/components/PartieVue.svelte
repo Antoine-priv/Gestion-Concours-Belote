@@ -30,8 +30,10 @@
   let selection = $state<{ table: number; cote: 'a' | 'b' } | null>(null);
   let filtre = $state<'toutes' | 'attente' | 'saisies'>('toutes');
 
+  // Le filtre n'est proposé que s'il y a à la fois des tables saisies et en attente.
+  const filtreActif = $derived(saisies > 0 && !complete ? filtre : 'toutes');
   const tablesAffichees = $derived(
-    partie.tables.filter((t) => filtre === 'toutes' || (filtre === 'attente' ? !t.resultat : !!t.resultat)),
+    partie.tables.filter((t) => filtreActif === 'toutes' || (filtreActif === 'attente' ? !t.resultat : !!t.resultat)),
   );
   const ouverte = $derived(partie.tables.find((t) => t.numero === tableOuverte));
 
@@ -129,7 +131,7 @@
 <div class="ligne outils">
   <form class="ligne" onsubmit={ouvrirNumero}>
     <label>Saisir la table n° <input type="number" min="1" bind:value={allerA} /></label>
-    <button type="submit">OK</button>
+    <button type="submit" disabled={allerA == null}>OK</button>
   </form>
   {#if !complete}
     <button class="principal" onclick={() => { tableOuverte = null; suivante(); }}>
@@ -137,12 +139,14 @@
     </button>
   {/if}
   <span class="espace"></span>
-  <select bind:value={filtre} aria-label="Filtrer les tables">
-    <option value="toutes">Toutes les tables</option>
-    <option value="attente">En attente</option>
-    <option value="saisies">Saisies</option>
-  </select>
-  {#if derniere && !c.termine}
+  {#if saisies > 0 && !complete}
+    <select bind:value={filtre} aria-label="Filtrer les tables">
+      <option value="toutes">Toutes les tables</option>
+      <option value="attente">En attente</option>
+      <option value="saisies">Saisies</option>
+    </select>
+  {/if}
+  {#if derniere && !c.termine && partie.tables.length > 1}
     <button class:principal={modeEchange} onclick={() => { modeEchange = !modeEchange; selection = null; }}>
       {modeEchange ? 'Terminer les échanges' : 'Modifier le tirage'}
     </button>

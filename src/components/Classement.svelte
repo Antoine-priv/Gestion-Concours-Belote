@@ -59,8 +59,10 @@
     </select>
   {/if}
   <span class="espace"></span>
-  <button onclick={() => imprimer({ type: 'classement', concours: c.id, jusqua })}>Imprimer / PDF</button>
-  <button onclick={exporter}>Exporter pour Excel</button>
+  {#if c.parties.length}
+    <button onclick={() => imprimer({ type: 'classement', concours: c.id, jusqua })}>Imprimer / PDF</button>
+    <button onclick={exporter}>Exporter pour Excel</button>
+  {/if}
 </div>
 
 {#if c.parties.length === 0}

@@ -22,6 +22,16 @@ permet en plus une copie automatique dans un fichier (Chrome/Edge) et une copie 
 > Chrome le considère comme une autre application. Exporter puis réimporter une sauvegarde
 > permet de les récupérer.
 
+## Version en ligne (GitHub Pages)
+
+Chaque envoi sur la branche `main` lance les tests, reconstruit l'application et la
+publie sur GitHub Pages (`.github/workflows/deploy.yml`). À activer une fois dans le dépôt :
+**Settings → Pages → Source : GitHub Actions**.
+
+Les données restent dans le navigateur de chaque ordinateur : rien n'est envoyé sur GitHub.
+La version en ligne et le fichier `index.html` ont chacun leurs propres données ; on passe
+de l'une à l'autre avec la sauvegarde (Télécharger une copie / Restaurer).
+
 ## Développer
 
 ```bash

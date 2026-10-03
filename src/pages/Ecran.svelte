@@ -89,9 +89,11 @@
   {/if}
 
   <div class="commandes">
-    <button class:actif={vue === 'tirage'} onclick={() => (vue = 'tirage')}>Tables</button>
-    <button class:actif={vue === 'classement'} onclick={() => (vue = 'classement')}>Classement</button>
-    <button class:actif={vue === 'auto'} onclick={() => (vue = 'auto')}>Alterner</button>
+    {#if partie}
+      <button class:actif={vue === 'tirage'} onclick={() => (vue = 'tirage')}>Tables</button>
+      <button class:actif={vue === 'classement'} onclick={() => (vue = 'classement')}>Classement</button>
+      <button class:actif={vue === 'auto'} onclick={() => (vue = 'auto')}>Alterner</button>
+    {/if}
     <button onclick={pleinEcran}>Plein écran</button>
   </div>
 </div>

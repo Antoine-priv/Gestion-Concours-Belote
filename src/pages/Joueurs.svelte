@@ -66,7 +66,7 @@
 {#if onglet === 'joueurs'}
   <form class="ligne carte" onsubmit={ajouter}>
     <label>Ajouter un joueur <input bind:value={nouveau} placeholder="Nom Prénom" /></label>
-    <button type="submit">Ajouter</button>
+    <button type="submit" disabled={!nouveau.trim()}>Ajouter</button>
     <span class="discret">Les joueurs sont aussi créés automatiquement lors des inscriptions.</span>
   </form>
 
@@ -108,7 +108,7 @@
               <td class="nb">{nb}</td>
               <td class="nb actions">
                 <button class="petit" onclick={() => (edition = j.id)}>Modifier</button>
-                <button class="petit" onclick={() => (fusion = { doublon: j.id, garde: '' })} title="Regrouper avec une autre fiche de la même personne">Doublon</button>
+                {#if app.donnees.joueurs.length > 1}<button class="petit" onclick={() => (fusion = { doublon: j.id, garde: '' })} title="Regrouper avec une autre fiche de la même personne">Doublon</button>{/if}
                 {#if nb === 0}<button class="petit danger" onclick={() => supprimer(j.id)}>Supprimer</button>{/if}
               </td>
             {/if}

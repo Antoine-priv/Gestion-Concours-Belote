@@ -10,6 +10,8 @@
   let lieu = $state('');
   let reglages = $state(dupliquerReglages());
   const aUnPrecedent = app.donnees.concours.length > 0;
+  const parDefaut = JSON.stringify(reglagesParDefaut());
+  const dejaParDefaut = $derived(JSON.stringify(reglages) === parDefaut);
 
   function creer(e: SubmitEvent) {
     e.preventDefault();
@@ -45,7 +47,7 @@
       Tout reste modifiable plus tard.
     </span>
     <span class="espace"></span>
-    <button type="button" onclick={() => (reglages = reglagesParDefaut())}>Revenir aux réglages par défaut</button>
+    <button type="button" disabled={dejaParDefaut} onclick={() => (reglages = reglagesParDefaut())}>Revenir aux réglages par défaut</button>
   </div>
 
   {#key reglages}

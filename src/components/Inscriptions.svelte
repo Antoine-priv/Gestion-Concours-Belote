@@ -212,6 +212,11 @@
   }
 
   const minimum = $derived(melee ? 4 : 2);
+  const formulaireComplet = $derived(!!j1.trim() && (melee || !!j2.trim()));
+  /** Des numéros manquent (après un retrait) : la renumérotation a un effet. */
+  const numerosATrous = $derived(
+    [...c.participants].sort((a, b) => a.numero - b.numero).some((p, i) => p.numero !== i + 1),
+  );
   const prochaine = $derived(c.parties.length + 1);
 
   function tirer() {
@@ -259,6 +264,8 @@
         <button
           class="principal"
           type="submit"
+          disabled={!formulaireComplet}
+          title={formulaireComplet ? '' : melee ? 'Indiquez le nom du joueur' : 'Indiquez les deux joueurs'}
           bind:this={bouton}
           onfocus={() => (boutonActif = true)}
           onblur={() => (boutonActif = false)}>Inscrire</button>
@@ -304,9 +311,11 @@
     <div class="ligne">
       <h2>{c.participants.length} {melee ? 'joueurs inscrits' : 'équipes inscrites'}</h2>
       <span class="espace"></span>
-      <input type="search" placeholder="Rechercher…" bind:value={recherche} />
-      <button onclick={() => imprimer({ type: 'inscrits', concours: c.id })}>Imprimer</button>
-      {#if c.parties.length === 0 && c.participants.length}
+      {#if c.participants.length}
+        <input type="search" placeholder="Rechercher…" bind:value={recherche} />
+        <button onclick={() => imprimer({ type: 'inscrits', concours: c.id })}>Imprimer</button>
+      {/if}
+      {#if c.parties.length === 0 && numerosATrous}
         <button onclick={() => renumeroter(c)} title="Renuméroter 1, 2, 3… sans trou">Renuméroter</button>
       {/if}
     </div>
