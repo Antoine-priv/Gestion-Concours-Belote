@@ -52,4 +52,19 @@ npm run check   # vérification des types
 ## Règles par défaut
 
 4 parties de 12 donnes, belote classique, capot à 252, points réels, classement aux
-victoires puis aux points, pas de revanche. Tout est modifiable par concours.
+victoires puis aux points, pas de revanche. Tout est modifiable par concours (fin de
+partie au temps ou au score, capot à 250, points arrondis, annonces, concours à la mêlée,
+critères de départage, points de l'équipe exempte, lots…).
+
+### Vérification des points
+
+À une table, le total des deux équipes est connu d'avance :
+
+```
+total = 162 × donnes + 20 × belotes + 90 × capots (capot à 252)
+```
+
+En 12 donnes, il vaut 1944 sans bonus et finit donc toujours par 4. L'application refuse
+une saisie qui ne concorde pas et suggère la cause probable (belote ou capot oublié) ;
+on peut forcer l'enregistrement, la table est alors marquée « à vérifier ».
+Pour une partie au temps, le nombre de donnes est retrouvé à partir des points.
