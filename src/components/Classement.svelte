@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { calculerClassement } from '../lib/classement';
+  import { confirmer } from '../lib/dialogue.svelte';
   import { csv, dateFr, rangTexte } from '../lib/format';
   import { imprimer } from '../lib/navigation.svelte';
   import { CRITERES, NB_PARTIES } from '../lib/reglages';
@@ -16,9 +17,12 @@
   const incomplet = $derived(c.parties.some((p) => p.numero <= jusqua && !partieComplete(c, p.numero)));
   const criteres = $derived(['total des points', ...c.reglages.departage.map((k) => CRITERES[k].libelle.toLowerCase())]);
 
-  function terminer() {
+  async function terminer() {
     const avance = c.parties.length < NB_PARTIES;
-    if (avance && !confirm(`Terminer le concours maintenant, après ${c.parties.length} partie(s) sur ${NB_PARTIES} ?`)) return;
+    if (avance && !(await confirmer('Terminer le concours maintenant ?', {
+      message: `Seules ${c.parties.length} partie(s) sur ${NB_PARTIES} ont été jouées.`,
+      valider: 'Terminer le concours',
+    }))) return;
     c.termine = true;
   }
 

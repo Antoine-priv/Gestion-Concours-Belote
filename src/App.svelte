@@ -1,5 +1,7 @@
 <script lang="ts">
+  import BoiteDialogue from './components/BoiteDialogue.svelte';
   import Impression from './components/Impression.svelte';
+  import { dialogue } from './lib/dialogue.svelte';
   import { impression, route } from './lib/navigation.svelte';
   import { sauvegarde } from './lib/store.svelte';
   import Accueil from './pages/Accueil.svelte';
@@ -71,6 +73,12 @@
       <Impression vue={impression.vue} />
     {/if}
   </div>
+
+  {#if dialogue.courant}
+    {#key dialogue.courant}
+      <BoiteDialogue demande={dialogue.courant} />
+    {/key}
+  {/if}
 {/if}
 
 <style>

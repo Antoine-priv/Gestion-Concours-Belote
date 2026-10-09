@@ -103,7 +103,7 @@ describe('classement', () => {
     expect(calculerClassement(c).find((l) => l.id === 'e3')).toMatchObject({ victoires: 1, points: 992 });
   });
 
-  it("rattrapage : l'exempt garde son score, l'adversaire joue pour du beurre", () => {
+  it("rattrapage : l'exempt garde son score, le score de l'adversaire n'est pas compté", () => {
     const c = concours(3);
     c.parties.push({
       numero: 1,

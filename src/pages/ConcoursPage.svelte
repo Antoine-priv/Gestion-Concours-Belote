@@ -3,6 +3,7 @@
   import Inscriptions from '../components/Inscriptions.svelte';
   import PartieVue from '../components/PartieVue.svelte';
   import ReglagesForm from '../components/ReglagesForm.svelte';
+  import { confirmer } from '../lib/dialogue.svelte';
   import { dateFr } from '../lib/format';
   import { aller } from '../lib/navigation.svelte';
   import { concours, nbPartiesPrevues, partieComplete, supprimerConcours } from '../lib/store.svelte';
@@ -19,9 +20,14 @@
     window.open(`#/ecran/${id}`, `ecran-${id}`, 'popup,width=1280,height=800');
   }
 
-  function supprimer() {
+  async function supprimer() {
     if (!c) return;
-    if (!confirm(`Supprimer définitivement le concours « ${c.nom} » et tous ses résultats ?`)) return;
+    const ok = await confirmer(`Supprimer le concours « ${c.nom} » ?`, {
+      message: 'Le concours, ses tirages et ses résultats seront définitivement effacés.',
+      valider: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
     supprimerConcours(c.id);
     aller('/');
   }

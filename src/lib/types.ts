@@ -57,7 +57,7 @@ export interface Table {
 
 /**
  * Match joué par l'équipe exempte contre une équipe qui a fini tôt.
- * Seul le score de l'exempt (camp a du résultat) compte ; l'adversaire joue « pour du beurre ».
+ * Seul le score de l'exempt (camp a du résultat) compte ; le score de l'adversaire n'est pas pris en compte.
  */
 export interface Rattrapage {
   adversaire: Id;

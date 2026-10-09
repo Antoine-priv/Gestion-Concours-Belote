@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmer, informer } from '../lib/dialogue.svelte';
   import {
     app,
     fusionnerJoueurs,
@@ -33,18 +34,22 @@
     nouveau = '';
   }
 
-  function supprimer(id: Id) {
-    if (!confirm(`Supprimer ${nomJoueur(id)} ?`)) return;
+  async function supprimer(id: Id) {
+    if (!(await confirmer(`Supprimer ${nomJoueur(id)} ?`, { valider: 'Supprimer', danger: true }))) return;
     try {
       supprimerJoueur(id);
     } catch (err) {
-      alert((err as Error).message);
+      informer('Suppression impossible', (err as Error).message);
     }
   }
 
-  function confirmerFusion() {
+  async function confirmerFusion() {
     if (!fusion?.garde) return;
-    if (!confirm(`Fusionner « ${nomJoueur(fusion.doublon)} » dans « ${nomJoueur(fusion.garde)} » ? Ses résultats seront regroupés.`)) return;
+    const ok = await confirmer(`Fusionner « ${nomJoueur(fusion.doublon)} » dans « ${nomJoueur(fusion.garde)} » ?`, {
+      message: 'Les deux fiches deviennent une seule ; leurs résultats sont regroupés.',
+      valider: 'Fusionner',
+    });
+    if (!ok || !fusion?.garde) return;
     fusionnerJoueurs(fusion.garde, fusion.doublon);
     fusion = null;
   }

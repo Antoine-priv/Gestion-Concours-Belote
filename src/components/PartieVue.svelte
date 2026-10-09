@@ -1,5 +1,6 @@
 <script lang="ts">
   import { pointsExempt } from '../lib/classement';
+  import { confirmer, informer } from '../lib/dialogue.svelte';
   import { aller, imprimer } from '../lib/navigation.svelte';
   import { MOITIE_PARTIE, NB_PARTIES } from '../lib/reglages';
   import { issue } from '../lib/score';
@@ -62,7 +63,7 @@
     e.preventDefault();
     if (allerA == null) return;
     if (partie.tables.some((t) => t.numero === allerA)) tableOuverte = allerA;
-    else alert(`Il n'y a pas de table n° ${allerA}.`);
+    else informer(`Il n'y a pas de table n° ${allerA}.`, `Les tables de cette partie vont de 1 à ${partie.tables.length}.`);
     allerA = null;
   }
 
@@ -70,7 +71,7 @@
     if (!modeEchange) tableOuverte = t.numero;
   }
 
-  function cliquerCamp(e: MouseEvent, t: Table, cote: 'a' | 'b') {
+  async function cliquerCamp(e: MouseEvent, t: Table, cote: 'a' | 'b') {
     if (!modeEchange) return;
     e.stopPropagation();
     if (!selection) {
@@ -81,9 +82,17 @@
       selection = null;
       return;
     }
-    const touchees = partie.tables.filter((x) => (x.numero === t.numero || x.numero === selection!.table) && x.resultat);
-    if (touchees.length && !confirm('Les résultats déjà saisis sur ces tables seront effacés. Continuer ?')) return;
-    echangerPlaces(c, numero, selection, { table: t.numero, cote });
+    const depart = selection;
+    const touchees = partie.tables.filter((x) => (x.numero === t.numero || x.numero === depart.table) && x.resultat);
+    if (touchees.length) {
+      const ok = await confirmer('Échanger ces deux équipes ?', {
+        message: 'Les résultats déjà saisis sur ces tables seront effacés.',
+        valider: 'Échanger',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    echangerPlaces(c, numero, depart, { table: t.numero, cote });
     selection = null;
   }
 
@@ -95,11 +104,16 @@
     rattrapageOuvert = true;
   }
 
-  function supprimerRattrapage() {
-    const msg = partie.rattrapage?.resultat
-      ? `Annuler le rattrapage ? Son score sera effacé et l'exempte recevra de nouveau ${texteExempt}.`
-      : 'Annuler le rattrapage ?';
-    if (confirm(msg)) annulerRattrapage(c, numero);
+  async function supprimerRattrapage() {
+    const ok = await confirmer('Annuler le rattrapage ?', {
+      message: partie.rattrapage?.resultat
+        ? `Son score sera effacé et l'exempte recevra de nouveau ${texteExempt}.`
+        : `L'exempte recevra ${texteExempt}.`,
+      valider: 'Annuler le rattrapage',
+      annuler: 'Garder',
+      danger: true,
+    });
+    if (ok) annulerRattrapage(c, numero);
   }
 
   const texteExempt = $derived(
@@ -110,21 +124,31 @@
 
   function tirerSuivante() {
     const revanches = lancerTirage(c);
-    if (revanches) alert(`Attention : ${revanches} revanche(s) n'ont pas pu être évitées.`);
+    if (revanches) informer('Revanches inévitables', `${revanches} équipe(s) rejouent contre un adversaire déjà rencontré.`);
     aller(`/concours/${c.id}/partie-${c.parties.length}`);
   }
 
-  function annuler() {
-    const msg = saisies
-      ? `Annuler le tirage de la partie ${numero} ? Les ${saisies} résultat(s) déjà saisi(s) seront perdus.`
-      : `Annuler le tirage de la partie ${numero} ?`;
-    if (!confirm(msg)) return;
+  async function annuler() {
+    const ok = await confirmer(`Annuler le tirage de la partie ${numero} ?`, {
+      message: saisies
+        ? saisies === 1
+          ? 'Le résultat déjà saisi sera perdu.'
+          : `Les ${saisies} résultats déjà saisis seront perdus.`
+        : 'Les tables de cette partie seront supprimées ; vous pourrez relancer le tirage.',
+      valider: 'Annuler le tirage',
+      annuler: 'Garder le tirage',
+      danger: true,
+    });
+    if (!ok) return;
     annulerDernierePartie(c);
     aller(`/concours/${c.id}/${c.parties.length ? `partie-${c.parties.length}` : 'inscriptions'}`);
   }
 
-  function terminer(avance: boolean) {
-    if (avance && !confirm(`Terminer le concours maintenant, après ${numero} partie(s) sur ${NB_PARTIES} ?`)) return;
+  async function terminer(avance: boolean) {
+    if (avance && !(await confirmer('Terminer le concours maintenant ?', {
+      message: `Seules ${numero} partie(s) sur ${NB_PARTIES} ont été jouées.`,
+      valider: 'Terminer le concours',
+    }))) return;
     c.termine = true;
     aller(`/concours/${c.id}/classement`);
   }
@@ -158,7 +182,7 @@
       <div class="ligne rattrapage">
         <span>
           <strong>Rattrapage</strong> contre n° {numeroParticipant(c, rat.adversaire)} {nomParticipant(rat.adversaire)}
-          <span class="discret">(pour du beurre : seul le score de l'exempte compte)</span>
+          <span class="discret">(seul le score de l'exempte est pris en compte)</span>
         </span>
         <span class="espace"></span>
         {#if rat.resultat}
@@ -329,7 +353,7 @@
     a={partie.exempt}
     b={partie.rattrapage.adversaire}
     initial={partie.rattrapage.resultat}
-    noteB="Joue pour du beurre : ses points ne comptent pas"
+    noteB="Score non pris en compte pour cette équipe"
     onenregistrer={(r) => enregistrerRattrapage(c, numero, r)}
     onfermer={() => (rattrapageOuvert = false)} />
 {/if}

@@ -16,9 +16,9 @@
   const feuilles = $derived(
     partie
       ? [
-          ...partie.tables.map((t) => ({ titre: `Table ${t.numero}`, a: t.a, b: t.b, beurre: false })),
+          ...partie.tables.map((t) => ({ titre: `Table ${t.numero}`, a: t.a, b: t.b, nonCompte: false })),
           ...(partie.exempt && partie.rattrapage
-            ? [{ titre: 'Rattrapage', a: partie.exempt, b: partie.rattrapage.adversaire, beurre: true }]
+            ? [{ titre: 'Rattrapage', a: partie.exempt, b: partie.rattrapage.adversaire, nonCompte: true }]
             : []),
         ]
       : [],
@@ -94,7 +94,7 @@
               <th class="donne">Donne</th>
               <th><span class="petit">n° {num(f.a)}</span><br />{nomParticipant(f.a)}</th>
               <th>
-                <span class="petit">n° {num(f.b)}{f.beurre ? ' — pour du beurre' : ''}</span><br />{nomParticipant(f.b)}
+                <span class="petit">n° {num(f.b)}{f.nonCompte ? ' — score non compté' : ''}</span><br />{nomParticipant(f.b)}
               </th>
             </tr>
           </thead>

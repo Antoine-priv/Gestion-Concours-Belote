@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { confirmer } from '../lib/dialogue.svelte';
   import { NB_DONNES } from '../lib/reglages';
   import { issue, verifier } from '../lib/score';
   import { nomParticipant, numeroParticipant } from '../lib/store.svelte';
@@ -21,7 +22,7 @@
     a: Id;
     b: Id;
     initial?: Resultat;
-    /** Remarque affichée sous l'équipe B (ex. « joue pour du beurre »). */
+    /** Remarque affichée sous l'équipe B (ex. score non pris en compte). */
     noteB?: string;
     onenregistrer: (res: Resultat | undefined) => void;
     onfermer: () => void;
@@ -74,12 +75,16 @@
     enregistrer(false, true);
   }
 
-  function forcer() {
-    if (confirm(`Les points ne concordent pas :\n${verif.message}\n\nEnregistrer quand même ?`)) enregistrer(true, true);
+  async function forcer() {
+    const ok = await confirmer('Enregistrer malgré l’écart ?', {
+      message: `${verif.message}\nLa table sera marquée « à vérifier ».`,
+      valider: 'Enregistrer quand même',
+    });
+    if (ok) enregistrer(true, true);
   }
 
-  function effacer() {
-    if (!confirm('Effacer ce résultat ?')) return;
+  async function effacer() {
+    if (!(await confirmer('Effacer ce résultat ?', { valider: 'Effacer', danger: true }))) return;
     onenregistrer(undefined);
     onfermer();
   }
@@ -99,7 +104,7 @@
         <span class="num">Équipe {numeroParticipant(c, a)}</span>
         <strong>{nomA}</strong>
       </div>
-      <div class="camp" class:gagne={gagnant === 'b'} class:beurre={!!noteB}>
+      <div class="camp" class:gagne={gagnant === 'b'} class:note={!!noteB}>
         <span class="num">Équipe {numeroParticipant(c, b)}</span>
         <strong>{nomB}</strong>
         {#if noteB}<small>{noteB}</small>{/if}
@@ -181,7 +186,7 @@
     background: var(--accent-clair);
     border-color: var(--accent);
   }
-  .camp.beurre small {
+  .camp.note small {
     color: var(--orange);
     font-weight: 600;
   }

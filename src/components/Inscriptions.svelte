@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { confirmer, informer } from '../lib/dialogue.svelte';
   import { imprimer } from '../lib/navigation.svelte';
   import {
     aJoue,
@@ -34,12 +35,9 @@
   let champ1: HTMLInputElement | undefined = $state();
   let champ2: HTMLInputElement | undefined = $state();
   let bouton: HTMLButtonElement | undefined = $state();
-  let boutonActif = $state(false);
 
   // On peut taper le premier nom dès l'arrivée sur la page.
   onMount(() => champ1?.focus());
-  /** Le formulaire est rempli et le bouton a le focus : il ne reste qu'à valider. */
-  const pret = $derived(boutonActif && !!j1.trim() && !!j2.trim());
 
   /** Joueurs déjà inscrits à ce concours (directement ou via leur équipe). */
   const joueursInscrits = $derived(
@@ -188,12 +186,12 @@
     }
   }
 
-  function retirer(id: Id) {
+  async function retirer(id: Id) {
+    if (!(await confirmer(`Retirer « ${nomParticipant(id)} » du concours ?`, { valider: 'Retirer', danger: true }))) return;
     try {
-      if (!confirm(`Retirer « ${nomParticipant(id)} » du concours ?`)) return;
       desinscrire(c, id);
     } catch (err) {
-      alert((err as Error).message);
+      informer('Impossible de retirer cette équipe', (err as Error).message);
     }
   }
 
@@ -210,7 +208,7 @@
 
   function tirer() {
     const revanches = lancerTirage(c);
-    if (revanches) alert(`Attention : ${revanches} revanche(s) n'ont pas pu être évitées.`);
+    if (revanches) informer('Revanches inévitables', `${revanches} équipe(s) rejouent contre un adversaire déjà rencontré.`);
     aller(`/concours/${c.id}/partie-${c.parties.length}`);
   }
 </script>
@@ -253,12 +251,7 @@
           type="submit"
           disabled={!formulaireComplet}
           title={formulaireComplet ? '' : 'Indiquez les deux joueurs'}
-          bind:this={bouton}
-          onfocus={() => (boutonActif = true)}
-          onblur={() => (boutonActif = false)}>Inscrire</button>
-        {#if pret}
-          <small class="pret">Vérifiez puis appuyez sur <kbd>Entrée</kbd> pour inscrire.</small>
-        {/if}
+          bind:this={bouton}>Inscrire</button>
         <small class="discret">
           Tapez le nom d’un joueur : ses équipes habituelles sont proposées et remplissent tout d’un coup. Un nouveau nom
           crée automatiquement une fiche joueur.
@@ -373,19 +366,6 @@
   .champ > label {
     font-weight: 600;
     font-size: 0.93rem;
-  }
-  .pret {
-    color: var(--accent-fort);
-    font-weight: 600;
-  }
-  kbd {
-    font: inherit;
-    font-size: 0.85em;
-    padding: 0 0.35em;
-    border: 1px solid var(--bord);
-    border-bottom-width: 2px;
-    border-radius: 4px;
-    background: var(--surface-2);
   }
   tr.abandon td {
     color: var(--texte-2);

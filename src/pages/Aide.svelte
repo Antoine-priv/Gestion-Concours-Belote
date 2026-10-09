@@ -52,7 +52,7 @@
     <dd>
       À chaque partie, une équipe est exempte (la moins bien classée qui ne l'a pas encore été) et reçoit par défaut 972 points,
       la moitié d'une partie. Si une équipe finit sa table tôt, « Faire jouer l'exempte » : elles jouent ensemble,
-      l'exempte garde son vrai score à la place des 972 points, et l'autre équipe joue pour du beurre.
+      l'exempte garde son vrai score à la place des 972 points, et le score de l'autre équipe n'est pas pris en compte.
     </dd>
     <dt>Je me suis trompé dans une saisie.</dt>
     <dd>Cliquez sur la table dans l'onglet de la partie et corrigez : le classement est recalculé tout seul.</dd>

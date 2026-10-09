@@ -59,7 +59,7 @@ critères peuvent être ajoutés). On peut terminer plus tôt ou ajouter une par
 Avec un nombre impair d'équipes, une équipe est exempte à chaque partie et reçoit 972 points
 (la moitié d'une partie), ou en option la moyenne des points de la partie. Si une équipe finit
 tôt, elle peut jouer un rattrapage contre l'exempte : celle-ci garde alors son vrai score, et
-l'autre équipe joue pour du beurre.
+celui de l'autre équipe n'est pas pris en compte.
 
 ### Vérification des points
 

@@ -36,7 +36,7 @@ TypeScript est volontairement en v6 (svelte-check n'accepte pas la v7). Un compo
 **Modèle de données** (`types.ts`) — subtilités :
 - `Concours.participants[].id`, `Table.a`/`Table.b`, `Partie.exempt` sont des ids d'`Equipe` du registre global (nom via `nomParticipant(id)`).
 - Les résultats vivent uniquement sur `Table.resultat` et `Partie.rattrapage.resultat`.
-- **Rattrapage** : l'exempte peut jouer contre une équipe qui a fini tôt (`Partie.rattrapage = { adversaire, resultat }`, camp `a` du résultat = l'exempte). L'exempte garde alors son vrai score au lieu des points d'office ; l'adversaire joue « pour du beurre » (aucun effet sur ses points, ses stats, ni sur l'anti-revanche). Une partie n'est complète que si son rattrapage éventuel est saisi.
+- **Rattrapage** : l'exempte peut jouer contre une équipe qui a fini tôt (`Partie.rattrapage = { adversaire, resultat }`, camp `a` du résultat = l'exempte). L'exempte garde alors son vrai score au lieu des points d'office ; le score de l'adversaire n'est pas pris en compte (aucun effet sur ses points, ses stats, ni sur l'anti-revanche). Dans l'interface, éviter l'expression familière « pour du beurre ». Une partie n'est complète que si son rattrapage éventuel est saisi.
 - `abandonPartie = n` : ne joue plus à partir de la partie n (`actifs()` garde `abandonPartie > numero`).
 - Équipes et joueurs sont réutilisés d'un concours à l'autre (`trouverOuCreerJoueur/Equipe`, nom normalisé sans accents ni casse) pour alimenter les statistiques.
 

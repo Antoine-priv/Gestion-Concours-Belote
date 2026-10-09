@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmer } from '../lib/dialogue.svelte';
   import { aujourdhui } from '../lib/format';
   import { fichierAutoDisponible, lireFichier, telecharger } from '../lib/stockage';
   import {
@@ -37,7 +38,12 @@
     try {
       const d = await lireFichier(f);
       const resume = `${d.concours.length} concours, ${d.joueurs.length} joueurs`;
-      if (!confirm(`Remplacer toutes les données actuelles par celles du fichier (${resume}) ?\n\nConseil : faites d'abord une copie de sauvegarde.`)) return;
+      const ok = await confirmer('Remplacer toutes les données actuelles ?', {
+        message: `Le fichier contient ${resume}. Les données actuelles seront remplacées.\nConseil : téléchargez d'abord une copie de sauvegarde.`,
+        valider: 'Remplacer',
+        danger: true,
+      });
+      if (!ok) return;
       remplacerDonnees(d);
       message = `Données restaurées : ${resume}.`;
     } catch (err) {

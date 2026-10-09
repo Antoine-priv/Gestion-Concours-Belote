@@ -56,7 +56,7 @@ export interface ScoreCompte {
 
 /**
  * Scores qui comptent dans une partie : les deux camps de chaque table saisie, plus
- * l'exempt s'il a joué un rattrapage (son adversaire, lui, joue pour du beurre).
+ * l'exempt s'il a joué un rattrapage (le score de son adversaire n'est pas pris en compte).
  */
 export function scoresComptes(p: Partie): ScoreCompte[] {
   const r: ScoreCompte[] = [];
