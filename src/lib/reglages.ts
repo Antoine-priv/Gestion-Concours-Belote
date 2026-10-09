@@ -31,18 +31,15 @@ export const CRITERES: Record<Critere, { libelle: string; explication: string }>
   },
   confrontation: {
     libelle: 'Confrontation directe',
-    explication:
-      "Si les deux équipes se sont affrontées, la gagnante passe devant. Rarement utile : sans revanche, elles se sont croisées au plus une fois, souvent jamais.",
+    explication: 'Si les deux équipes se sont affrontées, la gagnante passe devant.',
   },
   difference: {
     libelle: 'Différence de points',
-    explication:
-      "Points marqués moins points marqués par les adversaires. Presque inutile : une table fait toujours environ 1944 points, donc à égalité de points la différence est quasi identique.",
+    explication: 'Points marqués moins points marqués par les adversaires.',
   },
   pointsContre: {
     libelle: 'Le moins de points encaissés',
-    explication:
-      'Total des points marqués par les adversaires, le plus petit passe devant. Presque inutile, pour la même raison.',
+    explication: 'Total des points marqués par les adversaires : le plus petit passe devant.',
   },
   tirage: {
     libelle: 'Tirage au sort',
