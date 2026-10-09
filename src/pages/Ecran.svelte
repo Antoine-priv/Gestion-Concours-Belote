@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import Chrono from '../components/Chrono.svelte';
   import { calculerClassement } from '../lib/classement';
   import { rangTexte } from '../lib/format';
   import { lireLocal } from '../lib/stockage';
-  import { concours, nomCamp, nomParticipant, numeroParticipant, remplacerDonnees } from '../lib/store.svelte';
+  import { concours, nbPartiesPrevues, nomParticipant, numeroParticipant, remplacerDonnees } from '../lib/store.svelte';
 
   let { id }: { id: string } = $props();
 
@@ -49,30 +48,30 @@
         <h1>{c.nom}</h1>
         {#if partie}
           <span class="sous">
-            {affichee === 'tirage' ? `Partie ${partie.numero} / ${c.reglages.nbParties}` : c.termine ? 'Classement final' : `Classement après ${c.parties.length} partie${c.parties.length > 1 ? 's' : ''}`}
+            {affichee === 'tirage' ? `Partie ${partie.numero} / ${nbPartiesPrevues(c)}` : c.termine ? 'Classement final' : `Classement après ${c.parties.length} partie${c.parties.length > 1 ? 's' : ''}`}
           </span>
         {/if}
       </div>
-      {#if partie && !c.termine}
-        <Chrono {partie} dureeMinutes={c.reglages.dureeMinutes} lectureSeule grand />
-      {/if}
     </header>
 
     {#if !partie}
-      <p class="vide">Inscriptions en cours… {c.participants.length} {c.reglages.mode === 'melee' ? 'joueurs' : 'équipes'}</p>
+      <p class="vide">Inscriptions en cours… {c.participants.length} équipes</p>
     {:else if affichee === 'tirage'}
       <div class="liste" style="columns: {colonnes}; font-size: {taille}rem">
         {#each partie.tables as t (t.numero)}
           <div class="elem tablee">
             <span class="table">T{t.numero}</span>
-            <span>{nomCamp(c, t.a)} <small>({t.a.map((x) => numeroParticipant(c, x)).join('+')})</small></span>
+            <span>{nomParticipant(t.a)} <small>({numeroParticipant(c, t.a)})</small></span>
             <span class="contre">–</span>
-            <span>{nomCamp(c, t.b)} <small>({t.b.map((x) => numeroParticipant(c, x)).join('+')})</small></span>
+            <span>{nomParticipant(t.b)} <small>({numeroParticipant(c, t.b)})</small></span>
             <span class="score">{t.resultat ? `${t.resultat.a.points} – ${t.resultat.b.points}` : ''}</span>
           </div>
         {/each}
-        {#if partie.exempts.length}
-          <div class="elem exempt">Exempt : {partie.exempts.map((x) => nomParticipant(c, x)).join(', ')}</div>
+        {#if partie.exempt}
+          <div class="elem exempt">
+            Exempte : {nomParticipant(partie.exempt)}
+            {#if partie.rattrapage}— rattrapage contre {nomParticipant(partie.rattrapage.adversaire)}{/if}
+          </div>
         {/if}
       </div>
     {:else}
@@ -80,8 +79,8 @@
         {#each lignes as l (l.id)}
           <div class="elem" class:podium={l.rang <= 3}>
             <span class="rang">{rangTexte(l.rang)}</span>
-            <span class="nom">{nomParticipant(c, l.id)}</span>
-            <span class="score">{l.victoires} V · {l.points} pts</span>
+            <span class="nom">{nomParticipant(l.id)}</span>
+            <span class="score">{l.points} pts</span>
           </div>
         {/each}
       </div>
@@ -121,12 +120,6 @@
   .sous {
     font-size: clamp(1.1rem, 2vw, 1.8rem);
     color: #bfe3d2;
-  }
-  header :global(.affichage) {
-    color: #fff;
-  }
-  header :global(.affichage.fini) {
-    color: #ffb4a9;
   }
   .liste {
     column-gap: 3vw;

@@ -1,5 +1,6 @@
+import { MOITIE_PARTIE } from './reglages';
 import { issue } from './score';
-import type { Concours, Critere, Id, Partie } from './types';
+import type { Concours, Critere, Id, Partie, Resultat, ScoreCamp } from './types';
 
 export interface Ligne {
   id: Id;
@@ -12,8 +13,6 @@ export interface Ligne {
   exempts: number;
   /** Points reçus en étant exempt (exclus de la différence). */
   pointsExempt: number;
-  /** Victoires + ½ par match nul, utilisé pour classer. */
-  score: number;
   points: number;
   contre: number;
   difference: number;
@@ -21,8 +20,8 @@ export interface Ligne {
   belotes: number;
   capots: number;
   abandon: boolean;
+  /** Adversaires rencontrés (hors matchs de rattrapage), pour éviter les revanches. */
   adversaires: Id[];
-  partenaires: Id[];
 }
 
 function ligneVide(id: Id, numero: number, abandon: boolean): Ligne {
@@ -36,7 +35,6 @@ function ligneVide(id: Id, numero: number, abandon: boolean): Ligne {
     defaites: 0,
     exempts: 0,
     pointsExempt: 0,
-    score: 0,
     points: 0,
     contre: 0,
     difference: 0,
@@ -45,16 +43,38 @@ function ligneVide(id: Id, numero: number, abandon: boolean): Ligne {
     capots: 0,
     abandon,
     adversaires: [],
-    partenaires: [],
   };
 }
 
-/** Points attribués à un exempt pour une partie. */
+export interface ScoreCompte {
+  id: Id;
+  moi: ScoreCamp;
+  eux: ScoreCamp;
+  gagne: boolean;
+  nul: boolean;
+}
+
+/**
+ * Scores qui comptent dans une partie : les deux camps de chaque table saisie, plus
+ * l'exempt s'il a joué un rattrapage (son adversaire, lui, joue pour du beurre).
+ */
+export function scoresComptes(p: Partie): ScoreCompte[] {
+  const r: ScoreCompte[] = [];
+  const ajouter = (res: Resultat, a: Id, b?: Id) => {
+    const iss = issue(res);
+    r.push({ id: a, moi: res.a, eux: res.b, gagne: iss === 'a', nul: iss === 'nul' });
+    if (b) r.push({ id: b, moi: res.b, eux: res.a, gagne: iss === 'b', nul: iss === 'nul' });
+  };
+  for (const t of p.tables) if (t.resultat) ajouter(t.resultat, t.a, t.b);
+  if (p.exempt && p.rattrapage?.resultat) ajouter(p.rattrapage.resultat, p.exempt);
+  return r;
+}
+
+/** Points attribués d'office à l'exempt (quand il n'a pas joué de rattrapage). */
 export function pointsExempt(c: Concours, p: Partie): number {
-  const r = c.reglages;
-  if (r.exemptPoints === 'fixe') return r.exemptPointsFixes;
+  if (c.reglages.exemptPoints === 'moitie') return MOITIE_PARTIE;
   const scores = p.tables.flatMap((t) => (t.resultat ? [t.resultat.a.points, t.resultat.b.points] : []));
-  if (scores.length === 0) return 0;
+  if (scores.length === 0) return MOITIE_PARTIE;
   return Math.round(scores.reduce((s, x) => s + x, 0) / scores.length);
 }
 
@@ -68,27 +88,27 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/** Points marqués par a contre b dans leurs confrontations directes, moins ceux de b. */
+/** +1 par confrontation directe gagnée par a contre b, −1 par défaite. */
 function confrontation(c: Concours, a: Id, b: Id, jusqua: number): number {
   let solde = 0;
   for (const p of c.parties) {
     if (p.numero > jusqua) continue;
     for (const t of p.tables) {
       if (!t.resultat) continue;
-      const ia = t.a.includes(a) ? 'a' : t.b.includes(a) ? 'b' : null;
-      const ib = t.a.includes(b) ? 'a' : t.b.includes(b) ? 'b' : null;
-      if (!ia || !ib || ia === ib) continue;
+      const ca = t.a === a ? 'a' : t.b === a ? 'b' : null;
+      const cb = t.a === b ? 'a' : t.b === b ? 'b' : null;
+      if (!ca || !cb) continue;
       const iss = issue(t.resultat);
-      if (iss === ia) solde += 1;
-      else if (iss === ib) solde -= 1;
+      if (iss === ca) solde += 1;
+      else if (iss === cb) solde -= 1;
     }
   }
   return solde;
 }
 
 /**
- * Classement après les parties 1 à `jusqua` (toutes par défaut).
- * Seules les tables dont le résultat est saisi comptent.
+ * Classement après les parties 1 à `jusqua` (toutes par défaut) : total des points,
+ * puis les critères de départage. Seules les tables dont le résultat est saisi comptent.
  */
 export function calculerClassement(c: Concours, jusqua = Infinity): Ligne[] {
   const lignes = new Map<Id, Ligne>();
@@ -96,72 +116,51 @@ export function calculerClassement(c: Concours, jusqua = Infinity): Ligne[] {
     lignes.set(p.id, ligneVide(p.id, p.numero, p.abandonPartie != null));
   }
 
+  const compter = ({ id, moi, eux, gagne, nul }: ScoreCompte) => {
+    const l = lignes.get(id);
+    if (!l) return;
+    l.joues++;
+    if (nul) l.nuls++;
+    else if (gagne) l.victoires++;
+    else l.defaites++;
+    l.points += moi.points;
+    l.contre += eux.points;
+    l.meilleure = Math.max(l.meilleure, moi.points);
+    l.belotes += moi.belotes;
+    l.capots += moi.capots;
+  };
+
   for (const partie of c.parties) {
     if (partie.numero > jusqua) continue;
     for (const t of partie.tables) {
-      for (const camp of [t.a, t.b]) {
-        for (const id of camp) {
-          const l = lignes.get(id);
-          if (!l) continue;
-          const adv = camp === t.a ? t.b : t.a;
-          l.adversaires.push(...adv);
-          l.partenaires.push(...camp.filter((x) => x !== id));
-        }
-      }
-      const res = t.resultat;
-      if (!res) continue;
-      const iss = issue(res);
-      for (const cote of ['a', 'b'] as const) {
-        const moi = res[cote];
-        const eux = res[cote === 'a' ? 'b' : 'a'];
-        for (const id of t[cote]) {
-          const l = lignes.get(id);
-          if (!l) continue;
-          l.joues++;
-          if (iss === 'nul') l.nuls++;
-          else if (iss === cote) l.victoires++;
-          else l.defaites++;
-          l.points += moi.points;
-          l.contre += eux.points;
-          l.meilleure = Math.max(l.meilleure, moi.points);
-          l.belotes += moi.belotes;
-          l.capots += moi.capots;
-        }
-      }
+      lignes.get(t.a)?.adversaires.push(t.b);
+      lignes.get(t.b)?.adversaires.push(t.a);
     }
-    if (partie.exempts.length) {
+    scoresComptes(partie).forEach(compter);
+    const ex = partie.exempt ? lignes.get(partie.exempt) : undefined;
+    // Sans rattrapage joué, l'exempt reçoit des points d'office.
+    if (ex && !partie.rattrapage?.resultat) {
       const pts = pointsExempt(c, partie);
-      for (const id of partie.exempts) {
-        const l = lignes.get(id);
-        if (!l) continue;
-        l.exempts++;
-        l.points += pts;
-        l.pointsExempt += pts;
-        if (c.reglages.exemptVictoire) l.victoires++;
-      }
+      ex.exempts++;
+      ex.points += pts;
+      ex.pointsExempt += pts;
+      if (c.reglages.exemptVictoire) ex.victoires++;
     }
   }
 
-  for (const l of lignes.values()) {
-    l.score = l.victoires + l.nuls / 2;
-    l.difference = l.points - l.pointsExempt - l.contre;
-  }
+  for (const l of lignes.values()) l.difference = l.points - l.pointsExempt - l.contre;
 
-  const r = c.reglages;
-  const principal: Critere = r.classement === 'victoires' ? 'victoires' : 'points';
-  const criteres = [principal, ...r.departage.filter((k) => k !== principal)];
   const fin = Number.isFinite(jusqua) ? jusqua : c.parties.length;
-
   const comparer = (x: Ligne, y: Ligne): number => {
-    for (const k of criteres) {
+    if (y.points !== x.points) return y.points - x.points;
+    for (const k of c.reglages.departage) {
       let d = 0;
-      switch (k) {
-        case 'victoires': d = y.score - x.score; break;
-        case 'points': d = y.points - x.points; break;
-        case 'difference': d = y.difference - x.difference; break;
+      switch (k as Critere) {
+        case 'victoires': d = y.victoires + y.nuls / 2 - (x.victoires + x.nuls / 2); break;
         case 'meilleurePartie': d = y.meilleure - x.meilleure; break;
-        case 'pointsContre': d = x.contre - y.contre; break;
         case 'confrontation': d = -confrontation(c, x.id, y.id, fin); break;
+        case 'difference': d = y.difference - x.difference; break;
+        case 'pointsContre': d = x.contre - y.contre; break;
         case 'tirage': d = hash(c.id + x.id) - hash(c.id + y.id); break;
       }
       if (d !== 0) return d;

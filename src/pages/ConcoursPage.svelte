@@ -5,7 +5,7 @@
   import ReglagesForm from '../components/ReglagesForm.svelte';
   import { dateFr } from '../lib/format';
   import { aller } from '../lib/navigation.svelte';
-  import { concours, partieComplete, supprimerConcours } from '../lib/store.svelte';
+  import { concours, nbPartiesPrevues, partieComplete, supprimerConcours } from '../lib/store.svelte';
 
   let { id, onglet }: { id: string; onglet: string } = $props();
 
@@ -36,8 +36,8 @@
       <h1>{c.nom}</h1>
       <span class="discret">
         {dateFr(c.date)}{c.lieu ? ` — ${c.lieu}` : ''} ·
-        {c.participants.length} {c.reglages.mode === 'melee' ? 'joueurs' : 'équipes'} ·
-        {c.reglages.nbParties} parties
+        {c.participants.length} équipe{c.participants.length > 1 ? 's' : ''} ·
+        {nbPartiesPrevues(c)} parties
         {#if c.termine}<span class="pastille ok">Terminé</span>{/if}
       </span>
     </div>
@@ -57,9 +57,11 @@
         {#if partieComplete(c, p.numero)}<span class="coche" title="Tous les résultats sont saisis">✓</span>{/if}
       </a>
     {/each}
-    <a href="#/concours/{id}/classement" class:actif={ongletActif === 'classement'}>
-      {c.termine ? 'Classement final' : 'Classement'}
-    </a>
+    {#if c.parties.length}
+      <a href="#/concours/{id}/classement" class:actif={ongletActif === 'classement'}>
+        {c.termine ? 'Classement final' : 'Classement'}
+      </a>
+    {/if}
     <a href="#/concours/{id}/reglages" class:actif={ongletActif === 'reglages'}>Réglages</a>
   </nav>
 
@@ -69,7 +71,7 @@
     {#key numeroPartie}
       <PartieVue concours={c} numero={numeroPartie} />
     {/key}
-  {:else if ongletActif === 'classement'}
+  {:else if ongletActif === 'classement' && c.parties.length}
     <Classement concours={c} />
   {:else if ongletActif === 'reglages'}
     {#if c.parties.length}
@@ -85,7 +87,7 @@
         <label class="champ"><span>Lieu</span><input bind:value={c.lieu} /></label>
       </div>
     </section>
-    <ReglagesForm bind:reglages={c.reglages} modeVerrouille={c.participants.length > 0} />
+    <ReglagesForm bind:reglages={c.reglages} />
     <section class="carte">
       <h2>Supprimer le concours</h2>
       <p class="discret">Le concours, ses tirages et ses résultats seront effacés. Les joueurs restent enregistrés.</p>

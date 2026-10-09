@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dateFr } from '../lib/format';
   import { aller } from '../lib/navigation.svelte';
-  import { app, nomParticipant } from '../lib/store.svelte';
+  import { app, nbPartiesPrevues, nomParticipant } from '../lib/store.svelte';
   import { calculerClassement } from '../lib/classement';
   import type { Concours } from '../lib/types';
 
@@ -12,12 +12,12 @@
     if (c.parties.length === 0) return 'Inscriptions';
     const p = c.parties[c.parties.length - 1];
     const saisies = p.tables.filter((t) => t.resultat).length;
-    return `Partie ${p.numero} / ${c.reglages.nbParties} — ${saisies}/${p.tables.length} tables saisies`;
+    return `Partie ${p.numero} / ${nbPartiesPrevues(c)} — ${saisies}/${p.tables.length} tables saisies`;
   }
 
   function vainqueur(c: Concours): string {
     const premier = calculerClassement(c)[0];
-    return premier ? nomParticipant(c, premier.id) : '—';
+    return premier ? nomParticipant(premier.id) : '—';
   }
 </script>
 
@@ -46,7 +46,7 @@
       <a class="carte concours" href="#/concours/{c.id}">
         <strong>{c.nom}</strong>
         <span class="discret">{dateFr(c.date)}{c.lieu ? ` — ${c.lieu}` : ''}</span>
-        <span>{c.participants.length} {c.reglages.mode === 'melee' ? 'joueurs' : 'équipes'}</span>
+        <span>{c.participants.length} équipe{c.participants.length > 1 ? 's' : ''}</span>
         <span class="pastille attente">{etat(c)}</span>
       </a>
     {/each}

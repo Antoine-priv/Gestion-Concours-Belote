@@ -44,27 +44,31 @@ npm run check   # vérification des types
 |---|---|
 | `src/lib/score.ts` | Vérification de la concordance des points |
 | `src/lib/classement.ts` | Calcul du classement et départage |
-| `src/lib/tirage.ts` | Tirage au sort et appariement (sans revanche, exempts, mêlée) |
+| `src/lib/tirage.ts` | Tirage au sort et appariement (sans revanche, équipe exempte) |
 | `src/lib/store.svelte.ts` | État de l'application et sauvegarde |
 | `src/lib/stats.ts` | Statistiques multi-concours |
 | `src/pages`, `src/components` | Interface (Svelte 5) |
 
-## Règles par défaut
+## Règles
 
-4 parties de 12 donnes, belote classique, capot à 252, points réels, classement aux
-victoires puis aux points, pas de revanche. Tout est modifiable par concours (fin de
-partie au temps ou au score, capot à 250, points arrondis, annonces, concours à la mêlée,
-critères de départage, points de l'équipe exempte, lots…).
+Belote classique en équipes formées : 4 parties de 12 donnes, capot à 252, pas d'annonces.
+La 1re partie est tirée au sort, les suivantes selon le classement (1re contre 2e…), sans
+revanche. Classement au total des points ; en cas d'égalité, tirage au sort (d'autres
+critères peuvent être ajoutés). On peut terminer plus tôt ou ajouter une partie en cas d'imprévu.
+
+Avec un nombre impair d'équipes, une équipe est exempte à chaque partie et reçoit 972 points
+(la moitié d'une partie), ou en option la moyenne des points de la partie. Si une équipe finit
+tôt, elle peut jouer un rattrapage contre l'exempte : celle-ci garde alors son vrai score, et
+l'autre équipe joue pour du beurre.
 
 ### Vérification des points
 
 À une table, le total des deux équipes est connu d'avance :
 
 ```
-total = 162 × donnes + 20 × belotes + 90 × capots (capot à 252)
+total = 1944 (12 × 162) + 20 × belotes + 90 × capots
 ```
 
-En 12 donnes, il vaut 1944 sans bonus et finit donc toujours par 4. L'application refuse
+Il finit donc toujours par 4. L'application refuse
 une saisie qui ne concorde pas et suggère la cause probable (belote ou capot oublié) ;
 on peut forcer l'enregistrement, la table est alors marquée « à vérifier ».
-Pour une partie au temps, le nombre de donnes est retrouvé à partir des points.

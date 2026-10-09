@@ -2,25 +2,35 @@
   import { calculerClassement } from '../lib/classement';
   import { dateFr, rangTexte } from '../lib/format';
   import type { VueImpression } from '../lib/navigation.svelte';
-  import { concours, equipe, nomCamp, nomParticipant, nomsEquipe, numeroParticipant } from '../lib/store.svelte';
+  import { NB_DONNES } from '../lib/reglages';
+  import { concours, equipe, nbPartiesPrevues, nomParticipant, nomsEquipe, numeroParticipant } from '../lib/store.svelte';
   import type { Id } from '../lib/types';
 
   let { vue }: { vue: VueImpression } = $props();
 
   const c = $derived(concours(vue.concours)!);
-  const melee = $derived(c.reglages.mode === 'melee');
   const partie = $derived('partie' in vue ? c.parties.find((p) => p.numero === vue.partie) : undefined);
-  const nbLignes = $derived(c.reglages.finPartie === 'donnes' ? c.reglages.nbDonnes : 16);
+  const num = (id: Id) => numeroParticipant(c, id);
 
-  const nums = (ids: Id[]) => ids.map((id) => numeroParticipant(c, id)).join(' + ');
+  /** Une feuille par table, plus une pour le rattrapage de l'exempte s'il a été lancé. */
+  const feuilles = $derived(
+    partie
+      ? [
+          ...partie.tables.map((t) => ({ titre: `Table ${t.numero}`, a: t.a, b: t.b, beurre: false })),
+          ...(partie.exempt && partie.rattrapage
+            ? [{ titre: 'Rattrapage', a: partie.exempt, b: partie.rattrapage.adversaire, beurre: true }]
+            : []),
+        ]
+      : [],
+  );
 
   /** Pour l'affichage mural : retrouver sa table à partir de son numéro. */
   const parNumero = $derived(
     partie
       ? partie.tables
-          .flatMap((t) => [...t.a, ...t.b].map((id) => ({ id, table: t.numero })))
-          .concat(partie.exempts.map((id) => ({ id, table: 0 })))
-          .sort((x, y) => numeroParticipant(c, x.id) - numeroParticipant(c, y.id))
+          .flatMap((t) => [t.a, t.b].map((id) => ({ id, table: t.numero })))
+          .concat(partie.exempt ? [{ id: partie.exempt, table: 0 }] : [])
+          .sort((x, y) => num(x.id) - num(y.id))
       : [],
   );
 </script>
@@ -32,15 +42,15 @@
   </header>
 
   {#if vue.type === 'inscrits'}
-    <h1>{melee ? 'Joueurs inscrits' : 'Équipes inscrites'} ({c.participants.length})</h1>
+    <h1>Équipes inscrites ({c.participants.length})</h1>
     <table>
-      <thead><tr><th class="nb">N°</th><th>{melee ? 'Joueur' : 'Équipe'}</th></tr></thead>
+      <thead><tr><th class="nb">N°</th><th>Équipe</th></tr></thead>
       <tbody>
         {#each [...c.participants].sort((a, b) => a.numero - b.numero) as p (p.id)}
-          {@const e = melee ? undefined : equipe(p.id)}
+          {@const e = equipe(p.id)}
           <tr>
             <td class="nb">{p.numero}</td>
-            <td>{nomParticipant(c, p.id)}{#if e?.nom}<span class="petit"> — {nomsEquipe(e)}</span>{/if}</td>
+            <td>{nomParticipant(p.id)}{#if e?.nom}<span class="petit"> — {nomsEquipe(e)}</span>{/if}</td>
           </tr>
         {/each}
       </tbody>
@@ -48,57 +58,52 @@
   {:else if vue.type === 'tirage' && partie}
     <h1>Partie {partie.numero} — tirage des tables</h1>
     <table class="gros">
-      <thead><tr><th class="nb">Table</th><th>{melee ? 'Joueurs' : 'Équipe'}</th><th></th><th>{melee ? 'Joueurs' : 'Équipe'}</th></tr></thead>
+      <thead><tr><th class="nb">Table</th><th>Équipe</th><th></th><th>Équipe</th></tr></thead>
       <tbody>
         {#each partie.tables as t (t.numero)}
           <tr>
             <td class="nb"><strong>{t.numero}</strong></td>
-            <td><span class="petit">n° {nums(t.a)}</span> {nomCamp(c, t.a)}</td>
+            <td><span class="petit">n° {num(t.a)}</span> {nomParticipant(t.a)}</td>
             <td class="centre">contre</td>
-            <td><span class="petit">n° {nums(t.b)}</span> {nomCamp(c, t.b)}</td>
+            <td><span class="petit">n° {num(t.b)}</span> {nomParticipant(t.b)}</td>
           </tr>
         {/each}
       </tbody>
     </table>
-    {#if partie.exempts.length}
-      <p><strong>Exempt{partie.exempts.length > 1 ? 's' : ''} :</strong> {partie.exempts.map((id) => `n° ${numeroParticipant(c, id)} ${nomParticipant(c, id)}`).join(', ')}</p>
+    {#if partie.exempt}
+      <p><strong>Exempte :</strong> n° {num(partie.exempt)} {nomParticipant(partie.exempt)}</p>
     {/if}
 
     <h2 class="saut">Partie {partie.numero} — où suis-je ?</h2>
     <div class="colonnes">
       {#each parNumero as x (x.id)}
-        <div class="ou"><strong>n° {numeroParticipant(c, x.id)}</strong> {nomParticipant(c, x.id)} → <strong>{x.table ? `table ${x.table}` : 'exempt'}</strong></div>
+        <div class="ou"><strong>n° {num(x.id)}</strong> {nomParticipant(x.id)} → <strong>{x.table ? `table ${x.table}` : 'exempte'}</strong></div>
       {/each}
     </div>
   {:else if vue.type === 'feuilles' && partie}
-    {#each partie.tables as t (t.numero)}
-      <section class="feuille" class:deux={nbLignes <= 13}>
+    {#each feuilles as f (f.titre)}
+      <section class="feuille">
         <div class="feuille-entete">
-          <span class="table-num">Table {t.numero}</span>
-          <span>{c.nom} — Partie {partie.numero} / {c.reglages.nbParties}</span>
-          <span class="petit">
-            {c.reglages.finPartie === 'donnes'
-              ? `${c.reglages.nbDonnes} donnes`
-              : c.reglages.finPartie === 'temps'
-                ? `${c.reglages.dureeMinutes} minutes`
-                : `en ${c.reglages.scoreCible} points`}
-          </span>
+          <span class="table-num">{f.titre}</span>
+          <span>{c.nom} — Partie {partie.numero} / {nbPartiesPrevues(c)}</span>
+          <span class="petit">{NB_DONNES} donnes</span>
         </div>
         <table class="grille">
           <thead>
             <tr>
               <th class="donne">Donne</th>
-              <th><span class="petit">n° {nums(t.a)}</span><br />{nomCamp(c, t.a)}</th>
-              <th><span class="petit">n° {nums(t.b)}</span><br />{nomCamp(c, t.b)}</th>
+              <th><span class="petit">n° {num(f.a)}</span><br />{nomParticipant(f.a)}</th>
+              <th>
+                <span class="petit">n° {num(f.b)}{f.beurre ? ' — pour du beurre' : ''}</span><br />{nomParticipant(f.b)}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {#each Array.from({ length: nbLignes }, (_, i) => i + 1) as d (d)}
+            {#each Array.from({ length: NB_DONNES }, (_, i) => i + 1) as d (d)}
               <tr><td class="donne">{d}</td><td></td><td></td></tr>
             {/each}
             <tr class="bilan"><td>Belotes</td><td></td><td></td></tr>
             <tr class="bilan"><td>Capots</td><td></td><td></td></tr>
-            {#if c.reglages.annonces}<tr class="bilan"><td>Annonces</td><td></td><td></td></tr>{/if}
             <tr class="total"><td>TOTAL</td><td></td><td></td></tr>
           </tbody>
         </table>
@@ -106,32 +111,28 @@
     {/each}
   {:else if vue.type === 'classement'}
     {@const lignes = calculerClassement(c, vue.jusqua)}
-    {@const lots = c.reglages.lots.some(Boolean)}
     <h1>
       {c.termine && (vue.jusqua ?? c.parties.length) === c.parties.length ? 'Classement final' : `Classement après la partie ${vue.jusqua ?? c.parties.length}`}
     </h1>
     <table>
       <thead>
         <tr>
-          <th class="nb">Rang</th><th class="nb">N°</th><th>{melee ? 'Joueur' : 'Équipe'}</th>
-          <th class="nb">Gagnées</th><th class="nb">Points</th><th class="nb">Diff.</th>
+          <th class="nb">Rang</th><th class="nb">N°</th><th>Équipe</th>
+          <th class="nb">Points</th><th class="nb">Gagnées</th>
           <th class="nb">Belotes</th><th class="nb">Capots</th>
-          {#if lots}<th>Lot</th>{/if}
         </tr>
       </thead>
       <tbody>
         {#each lignes as l (l.id)}
-          {@const e = melee ? undefined : equipe(l.id)}
+          {@const e = equipe(l.id)}
           <tr>
             <td class="nb"><strong>{rangTexte(l.rang)}</strong></td>
             <td class="nb">{l.numero}</td>
-            <td>{nomParticipant(c, l.id)}{#if e?.nom}<span class="petit"> — {nomsEquipe(e)}</span>{/if}</td>
-            <td class="nb">{l.victoires}</td>
+            <td>{nomParticipant(l.id)}{#if e?.nom}<span class="petit"> — {nomsEquipe(e)}</span>{/if}</td>
             <td class="nb"><strong>{l.points}</strong></td>
-            <td class="nb">{l.difference}</td>
+            <td class="nb">{l.victoires}</td>
             <td class="nb">{l.belotes}</td>
             <td class="nb">{l.capots}</td>
-            {#if lots}<td>{c.reglages.lots[l.rang - 1] ?? ''}</td>{/if}
           </tr>
         {/each}
       </tbody>
@@ -207,19 +208,15 @@
     border-bottom: 1px dotted #999;
     break-inside: avoid;
   }
+  /* Deux feuilles de 12 donnes par page A4. */
   .feuille {
     break-inside: avoid;
-    break-after: page;
-    padding-top: 3mm;
-  }
-  /* Deux feuilles par page A4 quand elles tiennent. */
-  .feuille.deux {
-    break-after: auto;
     height: 132mm;
+    padding-top: 3mm;
     border-bottom: 1px dashed #999;
     margin-bottom: 4mm;
   }
-  .feuille.deux:nth-of-type(2n) {
+  .feuille:nth-of-type(2n) {
     break-after: page;
     border-bottom: none;
   }

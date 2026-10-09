@@ -1,27 +1,26 @@
 <script lang="ts">
-  import ReglagesForm from '../components/ReglagesForm.svelte';
   import { aujourdhui } from '../lib/format';
   import { aller } from '../lib/navigation.svelte';
-  import { reglagesParDefaut } from '../lib/reglages';
-  import { app, creerConcours, dupliquerReglages } from '../lib/store.svelte';
+  import { creerConcours } from '../lib/store.svelte';
 
   let nom = $state('Concours de belote');
   let date = $state(aujourdhui());
   let lieu = $state('');
-  let reglages = $state(dupliquerReglages());
-  const aUnPrecedent = app.donnees.concours.length > 0;
-  const parDefaut = JSON.stringify(reglagesParDefaut());
-  const dejaParDefaut = $derived(JSON.stringify(reglages) === parDefaut);
 
   function creer(e: SubmitEvent) {
     e.preventDefault();
-    const id = creerConcours(nom.trim() || 'Concours de belote', date, lieu.trim(), $state.snapshot(reglages));
-    aller(`/concours/${id}`);
+    const id = creerConcours(nom.trim() || 'Concours de belote', date, lieu.trim());
+    aller(`/concours/${id}/inscriptions`);
   }
 </script>
 
 <form onsubmit={creer}>
-  <h1>Nouveau concours</h1>
+  <div class="ligne entete">
+    <h1>Nouveau concours</h1>
+    <span class="espace"></span>
+    <a class="bouton" href="#/">Annuler</a>
+    <button class="principal" type="submit">Créer le concours</button>
+  </div>
 
   <section class="carte">
     <div class="grille-champs">
@@ -38,33 +37,21 @@
         <input bind:value={lieu} placeholder="Salle des fêtes" />
       </label>
     </div>
+    <p class="discret note">
+      4 parties de 12 donnes, classement aux points. Les autres réglages (départage, équipe exempte) sont dans
+      l'onglet « Réglages » du concours.
+    </p>
   </section>
-
-  <div class="ligne reglages-entete">
-    <h2>Règles</h2>
-    <span class="discret">
-      {aUnPrecedent ? 'Reprises du dernier concours.' : 'Réglages par défaut : 4 parties de 12 donnes, capot à 252.'}
-      Tout reste modifiable plus tard.
-    </span>
-    <span class="espace"></span>
-    <button type="button" disabled={dejaParDefaut} onclick={() => (reglages = reglagesParDefaut())}>Revenir aux réglages par défaut</button>
-  </div>
-
-  {#key reglages}
-    <ReglagesForm bind:reglages />
-  {/key}
-
-  <div class="ligne fin">
-    <a class="bouton" href="#/">Annuler</a>
-    <button class="principal" type="submit">Créer le concours</button>
-  </div>
 </form>
 
 <style>
-  .reglages-entete {
-    margin: 1.5rem 0 0.75rem;
+  .entete {
+    margin-bottom: 1rem;
   }
-  .reglages-entete h2 {
+  .entete h1 {
     margin: 0;
+  }
+  .note {
+    margin: 1rem 0 0;
   }
 </style>

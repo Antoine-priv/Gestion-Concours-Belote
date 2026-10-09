@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { imprimer } from '../lib/navigation.svelte';
   import {
     aJoue,
@@ -10,6 +10,7 @@
     equipe,
     inscrire,
     lancerTirage,
+    nbPartiesPrevues,
     nomJoueur,
     nomParticipant,
     nomsEquipe,
@@ -24,7 +25,6 @@
 
   let { concours: c }: { concours: Concours } = $props();
 
-  const melee = $derived(c.reglages.mode === 'melee');
   let j1 = $state('');
   let j2 = $state('');
   let nomEq = $state('');
@@ -35,13 +35,16 @@
   let champ2: HTMLInputElement | undefined = $state();
   let bouton: HTMLButtonElement | undefined = $state();
   let boutonActif = $state(false);
+
+  // On peut taper le premier nom dès l'arrivée sur la page.
+  onMount(() => champ1?.focus());
   /** Le formulaire est rempli et le bouton a le focus : il ne reste qu'à valider. */
-  const pret = $derived(boutonActif && !!j1.trim() && (melee || !!j2.trim()));
+  const pret = $derived(boutonActif && !!j1.trim() && !!j2.trim());
 
   /** Joueurs déjà inscrits à ce concours (directement ou via leur équipe). */
   const joueursInscrits = $derived(
     new Set(
-      c.participants.flatMap((p) => (melee ? [p.id] : (equipe(p.id)?.joueurs ?? []))),
+      c.participants.flatMap((p) => equipe(p.id)?.joueurs ?? []),
     ),
   );
 
@@ -53,7 +56,7 @@
 
   function texteRecherche(id: Id) {
     const e = equipe(id);
-    return melee || !e ? nomParticipant(c, id) : `${e.nom ?? ''} ${nomsEquipe(e)}`;
+    return e ? `${e.nom ?? ''} ${nomsEquipe(e)}` : '';
   }
 
   /** 2 : un mot du nom commence par la saisie ; 1 : le nom la contient ; 0 : aucun rapport. */
@@ -80,19 +83,17 @@
     const q = normaliser(j1);
     if (!q) return [];
     const res: Proposition[] = [];
-    if (!melee) {
-      for (const e of app.donnees.equipes) {
-        if (e.joueurs.some((id) => joueursInscrits.has(id))) continue;
-        const scores = e.joueurs.map((id) => correspond(nomJoueur(id), q));
-        const meilleur = Math.max(...scores, e.nom ? correspond(e.nom, q) : 0);
-        if (!meilleur) continue;
-        const [a, b] = scores[1] > scores[0] ? [e.joueurs[1], e.joueurs[0]] : e.joueurs;
-        res.push({
-          rang: meilleur * 1000 + nbConcours(e.id),
-          s: { cle: `e${e.id}`, titre: `${nomJoueur(a)} / ${nomJoueur(b)}`, badge: 'équipe', detail: e.nom },
-          action: () => choisirEquipe(e, a, b),
-        });
-      }
+    for (const e of app.donnees.equipes) {
+      if (e.joueurs.some((id) => joueursInscrits.has(id))) continue;
+      const scores = e.joueurs.map((id) => correspond(nomJoueur(id), q));
+      const meilleur = Math.max(...scores, e.nom ? correspond(e.nom, q) : 0);
+      if (!meilleur) continue;
+      const [a, b] = scores[1] > scores[0] ? [e.joueurs[1], e.joueurs[0]] : e.joueurs;
+      res.push({
+        rang: meilleur * 1000 + nbConcours(e.id),
+        s: { cle: `e${e.id}`, titre: `${nomJoueur(a)} / ${nomJoueur(b)}`, badge: 'équipe', detail: e.nom },
+        action: () => choisirEquipe(e, a, b),
+      });
     }
     for (const j of app.donnees.joueurs) {
       if (joueursInscrits.has(j.id)) continue;
@@ -100,7 +101,7 @@
       if (!sc) continue;
       res.push({
         rang: sc * 1000 - 500,
-        s: { cle: `j${j.id}`, titre: j.nom, detail: melee ? undefined : 'Seul — choisir ensuite son partenaire' },
+        s: { cle: `j${j.id}`, titre: j.nom, detail: 'Seul — choisir ensuite son partenaire' },
         action: () => choisirJoueur1(j.nom),
       });
     }
@@ -130,7 +131,7 @@
   async function choisirJoueur1(nom: string) {
     j1 = nom;
     await tick();
-    (melee ? bouton : champ2)?.focus();
+    champ2?.focus();
   }
 
   async function choisirJoueur2(nom: string) {
@@ -148,7 +149,7 @@
 
   /** Entrée sur le joueur 1 sans suggestion : on passe au joueur 2 au lieu d'inscrire. */
   function entree1(e: KeyboardEvent) {
-    if (melee || !j1.trim() || j2.trim()) return;
+    if (!j1.trim() || j2.trim()) return;
     e.preventDefault();
     champ2?.focus();
   }
@@ -162,35 +163,24 @@
     erreur = '';
     message = '';
     try {
-      if (melee) {
-        if (!j1.trim()) return;
-        if (joueursInscrits.has(chercherJoueur(j1)?.id ?? '')) {
-          erreur = `${j1} est déjà inscrit(e).`;
-          return;
-        }
-        const j = trouverOuCreerJoueur(j1);
-        inscrire(c, j.id);
-        message = `${j.nom} inscrit(e) avec le n° ${c.participants.at(-1)!.numero}.`;
-      } else {
-        if (!j1.trim() || !j2.trim()) {
-          erreur = 'Indiquez les deux joueurs de l’équipe.';
-          return;
-        }
-        if (normaliser(j1) === normaliser(j2)) {
-          erreur = 'Les deux joueurs doivent être différents.';
-          return;
-        }
-        const deja = [j1, j2].map(chercherJoueur).filter((j) => j && joueursInscrits.has(j.id));
-        if (deja.length) {
-          erreur = `${deja.map((j) => j!.nom).join(' et ')} ${deja.length > 1 ? 'sont' : 'est'} déjà inscrit(s) dans une autre équipe.`;
-          return;
-        }
-        const a = trouverOuCreerJoueur(j1);
-        const b = trouverOuCreerJoueur(j2);
-        const eq = trouverOuCreerEquipe(a.id, b.id, nomEq.trim() || undefined);
-        inscrire(c, eq.id);
-        message = `Équipe n° ${c.participants.at(-1)!.numero} inscrite : ${nomParticipant(c, eq.id)}.`;
+      if (!j1.trim() || !j2.trim()) {
+        erreur = 'Indiquez les deux joueurs de l’équipe.';
+        return;
       }
+      if (normaliser(j1) === normaliser(j2)) {
+        erreur = 'Les deux joueurs doivent être différents.';
+        return;
+      }
+      const deja = [j1, j2].map(chercherJoueur).filter((j) => j && joueursInscrits.has(j.id));
+      if (deja.length) {
+        erreur = `${deja.map((j) => j!.nom).join(' et ')} ${deja.length > 1 ? 'sont' : 'est'} déjà inscrit(s) dans une autre équipe.`;
+        return;
+      }
+      const a = trouverOuCreerJoueur(j1);
+      const b = trouverOuCreerJoueur(j2);
+      const eq = trouverOuCreerEquipe(a.id, b.id, nomEq.trim() || undefined);
+      inscrire(c, eq.id);
+      message = `Équipe n° ${c.participants.at(-1)!.numero} inscrite : ${nomParticipant(eq.id)}.`;
       j1 = j2 = nomEq = '';
       champ1?.focus();
     } catch (err) {
@@ -200,7 +190,7 @@
 
   function retirer(id: Id) {
     try {
-      if (!confirm(`Retirer « ${nomParticipant(c, id)} » du concours ?`)) return;
+      if (!confirm(`Retirer « ${nomParticipant(id)} » du concours ?`)) return;
       desinscrire(c, id);
     } catch (err) {
       alert((err as Error).message);
@@ -211,8 +201,7 @@
     abandonner(c, id, valeur ? Number(valeur) : undefined);
   }
 
-  const minimum = $derived(melee ? 4 : 2);
-  const formulaireComplet = $derived(!!j1.trim() && (melee || !!j2.trim()));
+  const formulaireComplet = $derived(!!j1.trim() && !!j2.trim());
   /** Des numéros manquent (après un retrait) : la renumérotation a un effet. */
   const numerosATrous = $derived(
     [...c.participants].sort((a, b) => a.numero - b.numero).some((p, i) => p.numero !== i + 1),
@@ -229,10 +218,10 @@
 <div class="disposition">
   <div>
     <form class="carte" onsubmit={ajouter}>
-      <h2>{melee ? 'Inscrire un joueur' : 'Inscrire une équipe'}</h2>
+      <h2>Inscrire une équipe</h2>
       <div class="pile">
         <div class="champ">
-          <label for="joueur1">{melee ? 'Nom du joueur' : 'Joueur 1'}</label>
+          <label for="joueur1">Joueur 1</label>
           <ChampSuggestions
             id="joueur1"
             bind:value={j1}
@@ -240,10 +229,9 @@
             suggestions={propositions1.map((p) => p.s)}
             onchoisir={choisir(propositions1)}
             onentree={entree1}
-            placeholder={melee ? 'Nom Prénom' : 'Nom Prénom, ou nom d’équipe'} />
+            placeholder="Nom Prénom, ou nom d’équipe" />
         </div>
-        {#if !melee}
-          <div class="champ">
+        <div class="champ">
             <label for="joueur2">Joueur 2</label>
             <ChampSuggestions
               id="joueur2"
@@ -258,14 +246,13 @@
             <span>Nom de l'équipe <small>(facultatif)</small></span>
             <input bind:value={nomEq} placeholder="Les As de pique" autocomplete="off" />
           </label>
-        {/if}
         {#if erreur}<div class="alerte erreur">{erreur}</div>{/if}
         {#if message}<div class="alerte info">{message}</div>{/if}
         <button
           class="principal"
           type="submit"
           disabled={!formulaireComplet}
-          title={formulaireComplet ? '' : melee ? 'Indiquez le nom du joueur' : 'Indiquez les deux joueurs'}
+          title={formulaireComplet ? '' : 'Indiquez les deux joueurs'}
           bind:this={bouton}
           onfocus={() => (boutonActif = true)}
           onblur={() => (boutonActif = false)}>Inscrire</button>
@@ -273,9 +260,8 @@
           <small class="pret">Vérifiez puis appuyez sur <kbd>Entrée</kbd> pour inscrire.</small>
         {/if}
         <small class="discret">
-          {melee
-            ? 'Les joueurs déjà venus sont proposés pendant la frappe.'
-            : 'Tapez le nom d’un joueur : ses équipes habituelles sont proposées et remplissent tout d’un coup. Un nouveau nom crée automatiquement une fiche joueur.'}
+          Tapez le nom d’un joueur : ses équipes habituelles sont proposées et remplissent tout d’un coup. Un nouveau nom
+          crée automatiquement une fiche joueur.
         </small>
       </div>
     </form>
@@ -285,19 +271,15 @@
       {#if c.parties.length === 0}
         <p>
           Quand tout le monde est inscrit, lancez le tirage au sort de la 1re partie.
-          {#if c.participants.length % (melee ? 4 : 2) !== 0 && c.participants.length >= minimum}
-            <br /><span class="discret">
-              {melee
-                ? `${c.participants.length % 4} joueur(s) seront exempts à chaque partie.`
-                : 'Nombre impair : une équipe sera exempte à chaque partie.'}
-            </span>
+          {#if c.participants.length % 2 === 1 && c.participants.length >= 2}
+            <br /><span class="discret">Nombre impair : une équipe sera exempte à chaque partie.</span>
           {/if}
         </p>
-        <button class="principal" disabled={c.participants.length < minimum} onclick={tirer}>
+        <button class="principal" disabled={c.participants.length < 2} onclick={tirer}>
           Tirage au sort de la partie 1
         </button>
-        {#if c.participants.length < minimum}
-          <p class="discret">Il faut au moins {minimum} {melee ? 'joueurs' : 'équipes'}.</p>
+        {#if c.participants.length < 2}
+          <p class="discret">Il faut au moins 2 équipes.</p>
         {/if}
       {:else}
         <p class="discret">
@@ -309,7 +291,7 @@
 
   <section class="carte">
     <div class="ligne">
-      <h2>{c.participants.length} {melee ? 'joueurs inscrits' : 'équipes inscrites'}</h2>
+      <h2>{c.participants.length} équipe{c.participants.length > 1 ? 's' : ''} inscrite{c.participants.length > 1 ? 's' : ''}</h2>
       <span class="espace"></span>
       {#if c.participants.length}
         <input type="search" placeholder="Rechercher…" bind:value={recherche} />
@@ -327,19 +309,19 @@
           <thead>
             <tr>
               <th class="nb">N°</th>
-              <th>{melee ? 'Joueur' : 'Équipe'}</th>
+              <th>Équipe</th>
               {#if c.parties.length}<th>Abandon</th>{/if}
               <th></th>
             </tr>
           </thead>
           <tbody>
             {#each liste as p (p.id)}
-              {@const eq = melee ? undefined : equipe(p.id)}
+              {@const eq = equipe(p.id)}
               <tr class:abandon={p.abandonPartie != null}>
                 <td class="nb"><strong>{p.numero}</strong></td>
                 <td>
                   {#if eq?.nom}<strong>{eq.nom}</strong> <span class="discret">— {nomsEquipe(eq)}</span>
-                  {:else}{nomParticipant(c, p.id)}{/if}
+                  {:else}{nomParticipant(p.id)}{/if}
                 </td>
                 {#if c.parties.length}
                   <td>
@@ -348,7 +330,7 @@
                       onchange={(e) => changerAbandon(p.id, e.currentTarget.value)}
                       title="À partir de quelle partie ne joue-t-il plus ?">
                       <option value="">Joue</option>
-                      {#each Array.from({ length: c.reglages.nbParties }, (_, i) => i + 1) as n (n)}
+                      {#each Array.from({ length: nbPartiesPrevues(c) }, (_, i) => i + 1) as n (n)}
                         {#if n > c.parties.length || n === p.abandonPartie}
                           <option value={n}>Ne joue plus dès la partie {n}</option>
                         {/if}

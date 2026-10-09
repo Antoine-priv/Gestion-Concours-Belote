@@ -1,4 +1,4 @@
-import { reglagesParDefaut } from './reglages';
+import { NB_PARTIES, reglagesParDefaut } from './reglages';
 import {
   choisirFichierAuto,
   ecrireFichier,
@@ -11,7 +11,7 @@ import {
   type Poignee,
 } from './stockage';
 import { tirerPartie } from './tirage';
-import type { Concours, Donnees, Equipe, Id, Joueur, Reglages, Resultat } from './types';
+import type { Concours, Donnees, Equipe, Id, Joueur, Partie, Resultat } from './types';
 
 export const app = $state<{ donnees: Donnees }>({ donnees: lireLocal() });
 
@@ -117,9 +117,8 @@ export function nomEquipe(e: Equipe): string {
   return e.nom || nomsEquipe(e);
 }
 
-/** Nom d'un participant : équipe (mode équipes) ou joueur (mode mêlée). */
-export function nomParticipant(c: Concours, id: Id): string {
-  if (c.reglages.mode === 'melee') return nomJoueur(id);
+/** Nom d'une équipe inscrite : son nom d'équipe, ou ses deux joueurs. */
+export function nomParticipant(id: Id): string {
   const e = equipe(id);
   return e ? nomEquipe(e) : '?';
 }
@@ -128,9 +127,9 @@ export function numeroParticipant(c: Concours, id: Id): number {
   return c.participants.find((p) => p.id === id)?.numero ?? 0;
 }
 
-/** Nom d'un camp à une table : l'équipe, ou les deux joueurs associés en mêlée. */
-export function nomCamp(c: Concours, ids: Id[]): string {
-  return ids.map((id) => nomParticipant(c, id)).join(' / ');
+/** Nombre de parties prévues : 4, ou plus si des parties ont été ajoutées. */
+export function nbPartiesPrevues(c: Concours): number {
+  return Math.max(NB_PARTIES, c.parties.length);
 }
 
 // --- Joueurs et équipes ---
@@ -161,10 +160,10 @@ export function trouverOuCreerEquipe(j1: Id, j2: Id, nom?: string): Equipe {
   return app.donnees.equipes[app.donnees.equipes.length - 1];
 }
 
-/** Concours où un joueur apparaît (directement en mêlée, ou via une équipe). */
+/** Concours où un joueur a été inscrit (via l'une de ses équipes). */
 export function utilisationsJoueur(id: Id): Concours[] {
   const equipes = new Set(app.donnees.equipes.filter((e) => e.joueurs.includes(id)).map((e) => e.id));
-  return app.donnees.concours.filter((c) => c.participants.some((p) => p.id === id || equipes.has(p.id)));
+  return app.donnees.concours.filter((c) => c.participants.some((p) => equipes.has(p.id)));
 }
 
 export function supprimerJoueur(id: Id) {
@@ -177,31 +176,19 @@ export function supprimerJoueur(id: Id) {
 export function fusionnerJoueurs(garde: Id, doublon: Id) {
   if (garde === doublon) return;
   const d = app.donnees;
-  for (const c of d.concours) {
-    for (const p of c.participants) if (p.id === doublon) p.id = garde;
-    for (const partie of c.parties) {
-      partie.exempts = partie.exempts.map((x) => (x === doublon ? garde : x));
-      for (const t of partie.tables) {
-        t.a = t.a.map((x) => (x === doublon ? garde : x));
-        t.b = t.b.map((x) => (x === doublon ? garde : x));
-      }
-    }
-  }
+  // Les concours ne référencent que des équipes : il suffit de corriger le registre.
   for (const e of d.equipes) e.joueurs = e.joueurs.map((x) => (x === doublon ? garde : x)) as [Id, Id];
   d.joueurs = d.joueurs.filter((j) => j.id !== doublon);
 }
 
 // --- Concours ---
 
-export function creerConcours(nom: string, date: string, lieu: string, reglages: Reglages): Id {
+/** Un nouveau concours part toujours des réglages par défaut (modifiables dans son onglet « Réglages »). */
+export function creerConcours(nom: string, date: string, lieu: string): Id {
   const id = uid();
+  const reglages = reglagesParDefaut();
   app.donnees.concours.unshift({ id, nom, date, lieu, reglages, participants: [], parties: [], termine: false });
   return id;
-}
-
-export function dupliquerReglages(): Reglages {
-  const dernier = app.donnees.concours[0];
-  return dernier ? structuredClone($state.snapshot(dernier.reglages)) : reglagesParDefaut();
 }
 
 export function supprimerConcours(id: Id) {
@@ -215,7 +202,9 @@ export function inscrire(c: Concours, id: Id) {
 }
 
 export function aJoue(c: Concours, id: Id): boolean {
-  return c.parties.some((p) => p.exempts.includes(id) || p.tables.some((t) => t.a.includes(id) || t.b.includes(id)));
+  return c.parties.some(
+    (p) => p.exempt === id || p.rattrapage?.adversaire === id || p.tables.some((t) => t.a === id || t.b === id),
+  );
 }
 
 export function desinscrire(c: Concours, id: Id) {
@@ -253,7 +242,29 @@ export function enregistrerResultat(c: Concours, partie: number, table: number, 
   else delete t.resultat;
 }
 
-/** Échange deux participants (ou camps) entre deux places du tirage. */
+function partie(c: Concours, numero: number): Partie | undefined {
+  return c.parties.find((p) => p.numero === numero);
+}
+
+/** L'exempt joue contre une équipe qui a fini tôt ; seul son score à lui comptera. */
+export function lancerRattrapage(c: Concours, numero: number, adversaire: Id) {
+  const p = partie(c, numero);
+  if (p?.exempt) p.rattrapage = { adversaire };
+}
+
+export function annulerRattrapage(c: Concours, numero: number) {
+  const p = partie(c, numero);
+  if (p) delete p.rattrapage;
+}
+
+export function enregistrerRattrapage(c: Concours, numero: number, res: Resultat | undefined) {
+  const r = partie(c, numero)?.rattrapage;
+  if (!r) return;
+  if (res) r.resultat = res;
+  else delete r.resultat;
+}
+
+/** Échange deux équipes entre deux places du tirage. */
 export function echangerPlaces(
   c: Concours,
   partie: number,
@@ -271,7 +282,8 @@ export function echangerPlaces(
   delete ty.resultat;
 }
 
+/** Toutes les tables saisies, ainsi que le rattrapage s'il a été lancé. */
 export function partieComplete(c: Concours, numero: number): boolean {
-  const p = c.parties.find((q) => q.numero === numero);
-  return !!p && p.tables.every((t) => t.resultat);
+  const p = partie(c, numero);
+  return !!p && p.tables.every((t) => t.resultat) && (!p.rattrapage || !!p.rattrapage.resultat);
 }

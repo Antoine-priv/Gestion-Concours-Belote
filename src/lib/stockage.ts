@@ -1,17 +1,21 @@
+import { migrerV1 } from './migration';
 import type { Donnees } from './types';
 
 const CLE = 'belote-concours';
 
 export function donneesVides(): Donnees {
-  return { version: 1, joueurs: [], equipes: [], concours: [] };
+  return { version: 2, joueurs: [], equipes: [], concours: [] };
 }
 
+/** Vérifie une sauvegarde et la convertit au format actuel si elle est ancienne. */
 export function valider(d: unknown): Donnees {
-  const x = d as Donnees;
-  if (!x || x.version !== 1 || !Array.isArray(x.joueurs) || !Array.isArray(x.equipes) || !Array.isArray(x.concours)) {
+  const x = d as { version?: number; joueurs?: unknown; equipes?: unknown; concours?: unknown } | null;
+  if (!x || !Array.isArray(x.joueurs) || !Array.isArray(x.equipes) || !Array.isArray(x.concours)) {
     throw new Error("Ce fichier n'est pas une sauvegarde de l'application.");
   }
-  return x;
+  if (x.version === 1) return migrerV1(x);
+  if (x.version === 2) return x as Donnees;
+  throw new Error('Cette sauvegarde vient d’une version plus récente de l’application.');
 }
 
 export function lireLocal(): Donnees {

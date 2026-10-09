@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dateFr } from '../lib/format';
-  import { app, nomCamp, nomJoueur, nomParticipant } from '../lib/store.svelte';
+  import { app, nomJoueur, nomParticipant } from '../lib/store.svelte';
   import { records, resumeConcours, statsJoueurs, type StatJoueur } from '../lib/stats';
   import type { Concours } from '../lib/types';
 
@@ -24,7 +24,7 @@
       .filter((s) => !recherche || nomJoueur(s.id).toLowerCase().includes(recherche.toLowerCase()))
       .sort((a, b) => (valeur(b, tri.cle) - valeur(a, tri.cle)) * (tri.desc ? 1 : -1) || nomJoueur(a.id).localeCompare(nomJoueur(b.id), 'fr')),
   );
-  const recs = $derived(records({ ...app.donnees, concours: concoursFiltres }, nomCamp));
+  const recs = $derived(records({ ...app.donnees, concours: concoursFiltres }, nomParticipant));
   const resumes = $derived(concoursFiltres.map((c) => ({ c, r: resumeConcours(c) })));
   const totaux = $derived(
     resumes.reduce((t, { r }) => ({ belotes: t.belotes + r.belotes, capots: t.capots + r.capots, parties: t.parties + r.parties }), {
@@ -95,8 +95,7 @@
     <input type="search" placeholder="Rechercher un joueur…" bind:value={recherche} />
   </div>
   <p class="discret">
-    Cliquez sur un titre de colonne pour trier. En équipe, les belotes et capots de l'équipe sont comptés pour ses deux
-    joueurs. Rangs et podiums : concours terminés uniquement.
+    Cliquez sur un titre de colonne pour trier. Les belotes et capots d'une équipe sont comptés pour ses deux joueurs. Rangs et podiums : concours terminés uniquement.
   </p>
   <div class="defile">
     <table class="liste">
@@ -150,7 +149,7 @@
             <td class="nb">{r.belotes}</td>
             <td class="nb">{r.capots}</td>
             <td class="nb">{r.meilleurePartie}</td>
-            <td>{r.vainqueur ? nomParticipant(c, r.vainqueur) : c.termine ? '—' : 'en cours'}</td>
+            <td>{r.vainqueur ? nomParticipant(r.vainqueur) : c.termine ? '—' : 'en cours'}</td>
           </tr>
         {/each}
       </tbody>

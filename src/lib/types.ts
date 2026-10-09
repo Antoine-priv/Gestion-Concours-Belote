@@ -15,48 +15,20 @@ export interface Equipe {
   joueurs: [Id, Id];
 }
 
-/** « equipes » : équipes déjà formées ; « melee » : partenaires tirés au sort à chaque partie. */
-export type ModeConcours = 'equipes' | 'melee';
-export type FinPartie = 'donnes' | 'temps' | 'score';
-export type ModeClassement = 'victoires' | 'points';
-export type Critere =
-  | 'points'
-  | 'victoires'
-  | 'difference'
-  | 'meilleurePartie'
-  | 'pointsContre'
-  | 'confrontation'
-  | 'tirage';
-/** complet : formule exacte ; dernierChiffre : méthode papier (le total finit par le bon chiffre). */
-export type Controle = 'complet' | 'dernierChiffre' | 'aucun';
-export type Appariement = 'classement' | 'hasard';
+/** Critères de départage, appliqués après le total des points. */
+export type Critere = 'victoires' | 'meilleurePartie' | 'confrontation' | 'difference' | 'pointsContre' | 'tirage';
 
 export interface Reglages {
-  mode: ModeConcours;
-  nbParties: number;
-  finPartie: FinPartie;
-  nbDonnes: number;
-  dureeMinutes: number;
-  scoreCible: number;
-  capot: 250 | 252;
-  annonces: boolean;
-  pointsArrondis: boolean;
-  controle: Controle;
-  classement: ModeClassement;
+  /** Ordre des critères en cas d'égalité de points. */
   departage: Critere[];
-  /** Comment sont formées les tables à partir de la 2e partie. */
-  appariement: Appariement;
   eviterRevanche: boolean;
-  exemptPoints: 'moyenne' | 'fixe';
-  exemptPointsFixes: number;
+  /** Points de l'équipe exempte : moitié d'une partie (972) ou moyenne des équipes de la partie. */
+  exemptPoints: 'moitie' | 'moyenne';
   exemptVictoire: boolean;
-  premiereTable: number;
-  /** lots[i] : lot du rang i + 1 (facultatif). */
-  lots: string[];
 }
 
 export interface Participant {
-  /** Id d'une Equipe (mode équipes) ou d'un Joueur (mode mêlée). */
+  /** Id d'une Equipe du registre. */
   id: Id;
   numero: number;
   /** Ne joue plus à partir de cette partie (abandon). */
@@ -67,39 +39,36 @@ export interface ScoreCamp {
   points: number;
   belotes: number;
   capots: number;
-  annonces: number;
 }
 
 export interface Resultat {
   a: ScoreCamp;
   b: ScoreCamp;
-  /** Nombre de donnes jouées, quand il n'est pas fixé par les réglages. */
-  donnes?: number;
   /** Enregistré malgré une concordance non vérifiée. */
   force?: boolean;
 }
 
 export interface Table {
   numero: number;
-  /** Participants de chaque camp : 1 équipe, ou 2 joueurs en mêlée. */
-  a: Id[];
-  b: Id[];
+  a: Id;
+  b: Id;
   resultat?: Resultat;
 }
 
-export interface Chrono {
-  /** Horodatage du démarrage (ms), ajusté à chaque reprise. */
-  debut?: number;
-  /** Temps restant figé quand le chrono est en pause (ms). */
-  restantPause?: number;
-  dureeMs: number;
+/**
+ * Match joué par l'équipe exempte contre une équipe qui a fini tôt.
+ * Seul le score de l'exempt (camp a du résultat) compte ; l'adversaire joue « pour du beurre ».
+ */
+export interface Rattrapage {
+  adversaire: Id;
+  resultat?: Resultat;
 }
 
 export interface Partie {
   numero: number;
   tables: Table[];
-  exempts: Id[];
-  chrono?: Chrono;
+  exempt?: Id;
+  rattrapage?: Rattrapage;
 }
 
 export interface Concours {
@@ -114,7 +83,7 @@ export interface Concours {
 }
 
 export interface Donnees {
-  version: 1;
+  version: 2;
   joueurs: Joueur[];
   equipes: Equipe[];
   concours: Concours[];

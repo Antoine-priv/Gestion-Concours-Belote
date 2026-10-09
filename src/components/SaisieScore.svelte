@@ -1,26 +1,36 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { NB_DONNES } from '../lib/reglages';
   import { issue, verifier } from '../lib/score';
-  import { enregistrerResultat, nomCamp, numeroParticipant } from '../lib/store.svelte';
-  import type { Concours, Resultat, Table } from '../lib/types';
+  import { nomParticipant, numeroParticipant } from '../lib/store.svelte';
+  import type { Concours, Id, Resultat } from '../lib/types';
 
   let {
     concours: c,
-    partie,
-    table,
+    titre,
+    a,
+    b,
+    initial,
+    noteB,
+    onenregistrer,
     onfermer,
     onsuivante,
   }: {
     concours: Concours;
-    partie: number;
-    table: Table;
+    titre: string;
+    a: Id;
+    b: Id;
+    initial?: Resultat;
+    /** Remarque affichée sous l'équipe B (ex. « joue pour du beurre »). */
+    noteB?: string;
+    onenregistrer: (res: Resultat | undefined) => void;
     onfermer: () => void;
-    onsuivante: () => void;
+    /** Si fourni, « Enregistrer et table suivante » enchaîne sur la table suivante. */
+    onsuivante?: () => void;
   } = $props();
 
-  const r = $derived(c.reglages);
   // Valeurs initiales du formulaire (le composant est recréé pour chaque table).
-  const ex = untrack(() => table.resultat);
+  const ex = untrack(() => initial);
   // Les champs vides valent 0 (sauf les points, obligatoires).
   let pa = $state<number | null>(ex?.a.points ?? null);
   let pb = $state<number | null>(ex?.b.points ?? null);
@@ -28,27 +38,20 @@
   let bb = $state<number | null>(ex?.b.belotes || null);
   let ca = $state<number | null>(ex?.a.capots || null);
   let cb = $state<number | null>(ex?.b.capots || null);
-  let aa = $state<number | null>(ex?.a.annonces || null);
-  let ab = $state<number | null>(ex?.b.annonces || null);
-  let donnes = $state<number | null>(ex?.donnes ?? null);
 
   let dialogue: HTMLDialogElement;
   let premier: HTMLInputElement;
 
   const v = (x: number | null) => (x == null || Number.isNaN(x) ? 0 : x);
   const resultat = $derived<Resultat>({
-    a: { points: v(pa), belotes: v(ba), capots: v(ca), annonces: r.annonces ? v(aa) : 0 },
-    b: { points: v(pb), belotes: v(bb), capots: v(cb), annonces: r.annonces ? v(ab) : 0 },
-    ...(donnes ? { donnes } : {}),
+    a: { points: v(pa), belotes: v(ba), capots: v(ca) },
+    b: { points: v(pb), belotes: v(bb), capots: v(cb) },
   });
   const complet = $derived(pa != null && pb != null);
-  const verif = $derived(verifier(resultat, r));
+  const verif = $derived(verifier(resultat));
   const gagnant = $derived(complet ? issue(resultat) : null);
-
-  const nomA = $derived(nomCamp(c, table.a));
-  const nomB = $derived(nomCamp(c, table.b));
-  const numA = $derived(table.a.map((id) => numeroParticipant(c, id)).join('+'));
-  const numB = $derived(table.b.map((id) => numeroParticipant(c, id)).join('+'));
+  const nomA = $derived(nomParticipant(a));
+  const nomB = $derived(nomParticipant(b));
 
   onMount(() => {
     dialogue.showModal();
@@ -60,10 +63,9 @@
     if (!complet) return;
     if (!verif.ok && !force) return;
     const res: Resultat = $state.snapshot(resultat);
-    if (verif.donnesDeduites && !res.donnes) res.donnes = verif.donnesDeduites;
     if (force && !verif.ok) res.force = true;
-    enregistrerResultat(c, partie, table.numero, res);
-    if (suivante) onsuivante();
+    onenregistrer(res);
+    if (suivante && onsuivante) onsuivante();
     else onfermer();
   }
 
@@ -77,8 +79,8 @@
   }
 
   function effacer() {
-    if (!confirm('Effacer le résultat de cette table ?')) return;
-    enregistrerResultat(c, partie, table.numero, undefined);
+    if (!confirm('Effacer ce résultat ?')) return;
+    onenregistrer(undefined);
     onfermer();
   }
 </script>
@@ -86,7 +88,7 @@
 <dialog bind:this={dialogue} onclose={onfermer}>
   <form onsubmit={soumettre}>
     <div class="ligne titre">
-      <h2>Table {table.numero} — Partie {partie}</h2>
+      <h2>{titre}</h2>
       <span class="espace"></span>
       <button type="button" class="lien" onclick={() => dialogue.close()} aria-label="Fermer">✕</button>
     </div>
@@ -94,12 +96,13 @@
     <div class="grille">
       <span></span>
       <div class="camp" class:gagne={gagnant === 'a'}>
-        <span class="num">{c.reglages.mode === 'melee' ? 'Joueurs' : 'Équipe'} {numA}</span>
+        <span class="num">Équipe {numeroParticipant(c, a)}</span>
         <strong>{nomA}</strong>
       </div>
-      <div class="camp" class:gagne={gagnant === 'b'}>
-        <span class="num">{c.reglages.mode === 'melee' ? 'Joueurs' : 'Équipe'} {numB}</span>
+      <div class="camp" class:gagne={gagnant === 'b'} class:beurre={!!noteB}>
+        <span class="num">Équipe {numeroParticipant(c, b)}</span>
         <strong>{nomB}</strong>
+        {#if noteB}<small>{noteB}</small>{/if}
       </div>
 
       <label for="pa" class="libelle">Points</label>
@@ -113,31 +116,13 @@
       <label for="ca" class="libelle">Capots</label>
       <input id="ca" type="number" min="0" inputmode="numeric" bind:value={ca} placeholder="0" />
       <input type="number" min="0" inputmode="numeric" bind:value={cb} placeholder="0" aria-label="Capots équipe B" />
-
-      {#if r.annonces}
-        <label for="aa" class="libelle">Annonces <small>(points)</small></label>
-        <input id="aa" type="number" min="0" step="10" inputmode="numeric" bind:value={aa} placeholder="0" />
-        <input type="number" min="0" step="10" inputmode="numeric" bind:value={ab} placeholder="0" aria-label="Annonces équipe B" />
-      {/if}
     </div>
 
-    {#if r.finPartie !== 'donnes' || donnes}
-      <label class="donnes">
-        Donnes jouées
-        <input type="number" min="1" inputmode="numeric" bind:value={donnes} placeholder={r.controle === 'complet' ? 'auto' : ''} />
-        {#if r.controle === 'complet' && !donnes}<small class="discret">Laisser vide : calculé à partir des points.</small>{/if}
-      </label>
-    {:else}
-      <p class="discret donnes">
-        {r.nbDonnes} donnes.
-        <button type="button" class="lien" onclick={() => (donnes = r.nbDonnes)}>Partie écourtée ?</button>
-      </p>
-    {/if}
+    <p class="discret">{NB_DONNES} donnes : le total doit faire {verif.attendu}.</p>
 
     {#if complet}
       <div class="alerte {verif.ok ? 'info' : 'erreur'}">
-        <strong>Total : {verif.total}</strong>
-        {#if verif.message} — {verif.message}{/if}
+        <strong>Total : {verif.total}</strong> — {verif.message}
         {#if verif.ok}
           <br />{gagnant === 'nul' ? 'Match nul.' : `Gagnant : ${gagnant === 'a' ? nomA : nomB}.`}
         {/if}
@@ -152,8 +137,12 @@
       {#if complet && !verif.ok}
         <button type="button" onclick={forcer}>Enregistrer quand même</button>
       {/if}
-      <button type="button" disabled={!complet || !verif.ok} onclick={() => enregistrer(false, false)}>Enregistrer</button>
-      <button type="submit" class="principal" disabled={!complet || !verif.ok}>Enregistrer et table suivante ⏎</button>
+      {#if onsuivante}
+        <button type="button" disabled={!complet || !verif.ok} onclick={() => enregistrer(false, false)}>Enregistrer</button>
+        <button type="submit" class="principal" disabled={!complet || !verif.ok}>Enregistrer et table suivante ⏎</button>
+      {:else}
+        <button type="submit" class="principal" disabled={!complet || !verif.ok}>Enregistrer ⏎</button>
+      {/if}
     </div>
   </form>
 </dialog>
@@ -192,6 +181,10 @@
     background: var(--accent-clair);
     border-color: var(--accent);
   }
+  .camp.beurre small {
+    color: var(--orange);
+    font-weight: 600;
+  }
   .num {
     font-size: 0.82rem;
     color: var(--texte-2);
@@ -206,12 +199,6 @@
     font-size: 1.35rem;
     font-weight: 700;
     padding: 0.3em 0.5em;
-  }
-  .donnes {
-    margin-bottom: 0.9rem;
-  }
-  .donnes input {
-    width: 6em;
   }
   .actions {
     margin-top: 0.5rem;
